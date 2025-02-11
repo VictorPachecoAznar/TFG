@@ -47,6 +47,10 @@ env/
 *.lyr
 *.style
 *.ecw
+*.sid
+*.qgz
+
+update_yaml.txt
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints
