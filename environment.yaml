@@ -1,4 +1,4 @@
-name: base
+name: segmentation_ai
 channels:
   - conda-forge
   - defaults
@@ -197,4 +197,3 @@ dependencies:
       - toolz==1.0.0
       - typing-extensions==4.12.2
       - zipp==3.21.0
-prefix: C:\Users\pachecvi\AppData\Local\miniconda3\envs\segmentation_ai
