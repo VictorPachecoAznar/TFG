@@ -4,7 +4,7 @@ from subprocess import Popen
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from time import time
-from fire import Fire
+#from fire import Fire
 
 BASE_DIR=os.getenv('BASE_DIR',os.path.dirname(__file__))
 DATA_DIR=os.path.join(BASE_DIR,'data')
@@ -21,6 +21,7 @@ def folder_check(dir):
 def _warp_single_raster(name,bounds,raster):
     options= gdal.WarpOptions(dstSRS=raster.dstSRS_wkt,dstNodata=0,outputBounds=bounds,outputBoundsSRS=raster.dstSRS_wkt)
     gdal.Warp(name,raster.raster,outputBounds=bounds,options=options)
+    
 class Ortophoto():
     def __init__(self,route=None,raster=None,crs=25831):
         if raster is None  and route is None:
@@ -95,9 +96,10 @@ class Ortophoto():
 
         # PARALELIZADO CON MAP REDUCE
         with ProcessPoolExecutor() as executor:
-             results = list(executor.map(processing,name_list,bound_list,chunksize=10))
+             results = list(executor.map(processing,name_list,bound_list,chunksize=2000))
         
         return name_list
+    
         #EJECUCIÓN SIN MAPREDUCE
         #tareas=[]
         #for name,bound in zip(name_list,bound_list):
