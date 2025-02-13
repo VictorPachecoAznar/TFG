@@ -19,8 +19,9 @@ def folder_check(dir):
         return dir
 
 def _warp_single_raster(name,bounds,raster):
-    options= gdal.WarpOptions(dstSRS=raster.dstSRS_wkt,dstNodata=0,outputBounds=bounds,outputBoundsSRS=raster.dstSRS_wkt)
+    options= gdal.WarpOptions(dstSRS=raster.dstSRS_wkt,dstNodata=0,outputBounds=bounds,outputBoundsSRS=raster.dstSRS_wkt,multithread=True)
     gdal.Warp(name,raster.raster,outputBounds=bounds,options=options)
+    
     
 class Ortophoto():
     def __init__(self,route=None,raster=None,crs=25831):
@@ -69,6 +70,7 @@ class Ortophoto():
          poly_str = f"POLYGON(({self.X_min} {self.Y_min},{self.X_max} {self.Y_min},{self.X_max} {self.Y_max},{self.X_min} {self.Y_max},{self.X_min} {self.Y_min}))"
 
     def polygonize(self,step,horizontal_skew=False,vertical_skew=False):
+
         
         name_list=[]
         bound_list=[]
@@ -104,16 +106,39 @@ class Ortophoto():
         #tareas=[]
         #for name,bound in zip(name_list,bound_list):
         #    tareas.append(processing(name=name,bounds=bounds))
+    
+    @staticmethod
+    def partition_image(image_array):
+        channels,height,width=image_array.shape
+        
+        #for channel in channels:
+        #    image_array
+        pass
+        
+
+
+
+    def create_pyramid(self,depth):
+        pyramid_dir=os.path.join(DATA_DIR,os.path.basename(self.raster_path).split('.')[0])+'_pyramid'
+        dirs=[folder_check(os.path.join(pyramid_dir,f'subset{i}')) for i in range(depth)]
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
+        # image_ndarray=self.raster.ReadAsArray()
+        # for channel in range(image_ndarray.shape[0]):
+        #     print(image_ndarray[channel].shape)
+            
+        # print(folder_check(pyramid_dir))
+        pass
+    
              
     
 
 
-if __name__=='__main__':
+# if __name__=='__main__':
 
-    t0=time()
-    [folder_check(dir) for dir in  [DATA_DIR,BASE_DIR,SCRIPTS_DIR]]
-    base_image = Ortophoto(os.path.join(DATA_DIR,'ORTO_PORT.tif'))
-    print(base_image.Y_pixel)
-    base_image.polygonize(1024)
-    t1=time()
-    print(f'TIME OCURRED:{t1-t0}')
+#     t0=time()
+#     [folder_check(dir) for dir in  [DATA_DIR,BASE_DIR,SCRIPTS_DIR]]
+#     base_image = Ortophoto(os.path.join(DATA_DIR,'ORTO_PORT.tif'))
+#     print(base_image.Y_pixel)
+#     base_image.polygonize(1024)
+#     t1=time()
+#     print(f'TIME OCURRED:{t1-t0}')
