@@ -11,10 +11,10 @@ import fire
 import subprocess
 
 
-def find_extension(args)
+def find_extension(args):
     input_strings=list(args)
     extensions=[]
-    for i in input_strings
+    for i in input_strings:
         ins=i.split()
         extensions.append(ins[len(ins)-1])
     return extensions
@@ -25,15 +25,12 @@ def _translate_single_raster(out_epsg,args):
 
     '''
     crs=str(out_epsg)
-    in_file, out_file=args
-    in_ext, out_ext= find_extension(in_file,out_file)
+    in_path, out_path=args
+    in_ext, out_ext= find_extension(in_path,out_path)
     driverDict={'tif':'GTiff'}
-    if 
-
-    in_path,out_path=
 
     if driverDict[out_ext]:
-        translate_command=f'''gdal_translate -a_srs EPSG:{crs} -of {driverDict[out_ext]} {input.sid} {output.tif}'''
+        translate_command=f'''gdal_translate -a_srs EPSG:{crs} -of {driverDict[out_ext]} {in_path} {out_path}'''
         subprocess.run(
             translate_command, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
@@ -48,7 +45,7 @@ def transform_raster(args):
 
 if __name__ == '__main__':
 
-    RASTER_TRANSLATION_FOLDER=pruebas_samgeo.folder_check(os.path.join(DATA_DIR,'raster_translation'))
+    RASTER_TRANSLATION_FOLDER=folder_check(os.path.join(DATA_DIR,'raster_translation'))
     
     if RASTER_TRANSLATION_FOLDER is not None:
         fire.Fire(
