@@ -1,14 +1,20 @@
 from osgeo import gdal, osr
 import os
-from subprocess import Popen
+import subprocess
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from time import time
+from math import sqrt,log
+import geopandas as gpd
+
 #from fire import Fire
 
 BASE_DIR=os.getenv('BASE_DIR',os.path.dirname(__file__))
 DATA_DIR=os.path.join(BASE_DIR,'data')
 SCRIPTS_DIR=os.path.join(BASE_DIR,'scripts')
+STATIC_DIR=os.path.join(BASE_DIR,'static')
+
+
 
 def folder_check(dir):
     if os.path.exists(dir):
@@ -21,9 +27,32 @@ def folder_check(dir):
 def _warp_single_raster(name,bounds,raster):
     options= gdal.WarpOptions(dstSRS=raster.dstSRS_wkt,dstNodata=0,outputBounds=bounds,outputBoundsSRS=raster.dstSRS_wkt,multithread=True)
     gdal.Warp(name,raster.raster,outputBounds=bounds,options=options)
+
+def _warp_single_raster_shell(name,bounds,raster):
+    options= gdal.WarpOptions(dstSRS=raster.dstSRS_wkt,dstNodata=0,outputBounds=bounds,outputBoundsSRS=raster.dstSRS_wkt,multithread=True)
     
-    
+    #para reproyecciones grandes se puede hacer -wo NUM_THREADS=ALL_CPUS-2, sólo en casos individuales no paralelizados por mí.
+    #subprocess allows for arguments to be given in lists
+
+    command=f'gdalwarp -q -multi -wm 5000 -te  {bounds[0]} {bounds[1]} {bounds[2]} {bounds[3]} "{raster.raster_path}" "{name}"'
+    subprocess.Popen(command,shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+def _generalize_single_raster(name,bounds,raster,xRes,yRes):
+    options= gdal.WarpOptions(dstSRS=raster.dstSRS_wkt,dstNodata=0,outputBounds=bounds,outputBoundsSRS=raster.dstSRS_wkt,multithread=True,xRes=xRes,yRes=yRes,resampleAlg='bilinear')
+    gdal.Warp(name,raster.raster,options=options)
+
+def closest_base_power(x,power=2):
+    return power**int(log(x,power))    
+
+def bounds2wkt(bounds):
+    (X_min,Y_min,X_max,Y_max)=bounds
+    poly_str = f"POLYGON(({X_min} {Y_min},{X_max} {Y_min},{X_max} {Y_max},{X_min} {Y_max},{X_min} {Y_min}))"
+    return poly_str
+
+
+[folder_check(dir) for dir in  [DATA_DIR,BASE_DIR,SCRIPTS_DIR,STATIC_DIR]]
 class Ortophoto():
+
     def __init__(self,route=None,raster=None,crs=25831):
         if raster is None  and route is None:
             print('raster wasn\'t kiaded')
@@ -38,7 +67,7 @@ class Ortophoto():
                     return None
             
             self.raster_path=route
-            [self.X_min, self.X_pixel, self.X_spin, self.Y_max, self.Y_spin, self.Y_pixel]=self.raster.GetGeoTransform()
+            self.GT=[self.X_min, self.X_pixel, self.X_spin, self.Y_max, self.Y_spin, self.Y_pixel]=self.raster.GetGeoTransform()
             self.X_max = self.X_min + self.X_pixel * self.raster.RasterXSize
             self.Y_min = self.Y_max + self.Y_pixel * self.raster.RasterYSize
             self.width=self.X_max-self.X_min
@@ -69,43 +98,54 @@ class Ortophoto():
     def get_wkt(self):
          poly_str = f"POLYGON(({self.X_min} {self.Y_min},{self.X_max} {self.Y_min},{self.X_max} {self.Y_max},{self.X_min} {self.Y_max},{self.X_min} {self.Y_min}))"
 
-    def polygonize(self,step,horizontal_skew=False,vertical_skew=False):
-
-        
-        name_list=[]
-        bound_list=[]
-        # Generación de las ventanas para los recortes
-        ncol,nrow=0,0
-        tiles_dir=folder_check(os.path.join(DATA_DIR,f'tiles_{step}'))
+    def tesselation(self,dir,step):
         metric_x=step*self.X_pixel
         metric_y=step*self.Y_pixel
 
         cols=abs(int(self.width/metric_x))#+1
         rows=abs(int(self.height/metric_y))#+1
 
+        name_list,bound_list=[],[]
+        ncol,nrow=0,0
+
         for i in range(cols):
             for j in range(rows):
-                name=os.path.join(tiles_dir,f'result_{step}_grid_{nrow}_{ncol}.tif')
-                bounds=(self.X_min+metric_x*i,self.Y_max+metric_y*j,self.X_min+metric_x*(i+1),self.Y_max+metric_y*(j+1))
+                name=os.path.join(dir,f'tile_{step}_grid_{nrow}_{ncol}.tif')
+                bounds=(self.X_min+metric_x*i,self.Y_max+metric_y*(j+1),self.X_min+metric_x*(i+1),self.Y_max+metric_y*j)
                 name_list.append(name)
                 bound_list.append(bounds) 
                 nrow+=1
-
             ncol+=1
-            nrow=0     
+            nrow=0  
+        return name_list, bound_list
 
-        processing=partial(_warp_single_raster,raster=self)
+    
+    def polygonize(self,step,horizontal_skew=False,vertical_skew=False):
+
+        
+        name_list=[]
+        bound_list=[]
+        # Generación de las ventanas para los recortes
+
+        tiles_dir=folder_check(os.path.join(DATA_DIR,f'tiles_{os.path.basename(self.raster_path).split(".")[0]}_{step}'))
+
+
+        name_list,bound_list=self.tesselation(tiles_dir,step)
+
+        # Partial application of the function to avoid raster reopening
+        processing=partial(_warp_single_raster_shell,raster=self)
 
         # PARALELIZADO CON MAP REDUCE
         with ProcessPoolExecutor() as executor:
              results = list(executor.map(processing,name_list,bound_list,chunksize=2000))
         
-        return name_list
+        #return name_list
     
         #EJECUCIÓN SIN MAPREDUCE
         #tareas=[]
         #for name,bound in zip(name_list,bound_list):
         #    tareas.append(processing(name=name,bounds=bounds))
+
     
     @staticmethod
     def partition_image(image_array):
@@ -114,14 +154,50 @@ class Ortophoto():
         #for channel in channels:
         #    image_array
         pass
-        
+    
+
+    def explore(self,bound_list,tile_size):
+        wkts=[bounds2wkt(b)for b in bound_list]
+        gdf=gpd.GeoDataFrame(geometry=gpd.GeoSeries.from_wkt(wkts),crs=self.crs)
+        gdf['area']=gdf['geometry'].area
+        m=gdf.explore()
+        m.save(os.path.join(STATIC_DIR,f'{tile_size}.html'))
 
 
+    def create_pyramid(self,lowest_pixel_size):
+        largest_side=max(self.pixel_width,self.pixel_height)
+        smallest_side=min(self.pixel_width,self.pixel_height)    
 
-    def create_pyramid(self,depth):
-        pyramid_dir=os.path.join(DATA_DIR,os.path.basename(self.raster_path).split('.')[0])+'_pyramid'
-        dirs=[folder_check(os.path.join(pyramid_dir,f'subset{i}')) for i in range(depth)]
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
+        #finding the biggest available 2-power aspect relationship
+        aspect_relationship=self.pixel_width/self.pixel_height
+        quadratic_aspect_relationship=closest_base_power(aspect_relationship)
+
+        largest_tile=closest_base_power(smallest_side)
+        depth=int(log(largest_tile,2))-int(log(lowest_pixel_size,2))
+
+
+        if depth<=0:
+            print('LA TESELA PEDIDA NO ES DE UN TAMAÑO SUFICIENTE')
+
+        pyramid_dir=folder_check(os.path.join(DATA_DIR,os.path.basename(self.raster_path).split('.')[0])+'_pyramid')
+        dirs=[folder_check(os.path.join(pyramid_dir,f'subset{i}')) for i in range(depth+1)]
+        image_loaded_generalization=partial(_generalize_single_raster,raster=self)             
+
+
+        for layer in range(depth,-1,-1):
+            divisor=int(2**layer)
+            tile_size=largest_tile/divisor
+            mult=2**(depth-layer)
+            xRes,yRes=self.X_pixel*mult,self.Y_pixel*mult
+
+            directory=dirs[layer]
+            name_list,bound_list=self.tesselation(directory,tile_size)
+            self.explore(bound_list,tile_size)
+            generalize=partial(image_loaded_generalization,xRes=xRes,yRes=yRes)
+
+            with ProcessPoolExecutor() as executor:
+                results=list(executor.map(generalize,name_list,bound_list))
+            
         # image_ndarray=self.raster.ReadAsArray()
         # for channel in range(image_ndarray.shape[0]):
         #     print(image_ndarray[channel].shape)
@@ -141,4 +217,4 @@ class Ortophoto():
 #     print(base_image.Y_pixel)
 #     base_image.polygonize(1024)
 #     t1=time()
-#     print(f'TIME OCURRED:{t1-t0}')
+#     print(f'TIME OCURRED:{t1-t0}'

@@ -7,7 +7,6 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(root_dir)
 
 from pruebas_samgeo import *
-import fire
 import subprocess
 
 
@@ -31,7 +30,7 @@ def _translate_single_raster(out_epsg,args):
 
     if driverDict[out_ext]:
         translate_command=f'''gdal_translate -a_srs EPSG:{crs} -of {driverDict[out_ext]} {in_path} {out_path}'''
-        subprocess.run(
+        subprocess.call(
             translate_command, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
 
