@@ -78,6 +78,12 @@ class Ortophoto():
             self.wkt=self.get_wkt()
             self.getSRS()
 
+    def __repr__(self):
+        ''''
+        PRINTS LOCAL PATH
+        '''
+        return self.raster_path
+
     # PICKLE FOR SERIALIZATION get and set state functions. 
     # These work by using a dict
 
@@ -96,7 +102,7 @@ class Ortophoto():
         self.dstSRS_wkt = srs.ExportToWkt()
         
     def get_wkt(self):
-         poly_str = f"POLYGON(({self.X_min} {self.Y_min},{self.X_max} {self.Y_min},{self.X_max} {self.Y_max},{self.X_min} {self.Y_max},{self.X_min} {self.Y_min}))"
+        return f"POLYGON(({self.X_min} {self.Y_min},{self.X_max} {self.Y_min},{self.X_max} {self.Y_max},{self.X_min} {self.Y_max},{self.X_min} {self.Y_min}))"
 
     def tesselation(self,dir,step):
         metric_x=step*self.X_pixel
@@ -107,7 +113,7 @@ class Ortophoto():
 
         name_list,bound_list=[],[]
         ncol,nrow=0,0
-
+        step=int(step)
         for i in range(cols):
             for j in range(rows):
                 name=os.path.join(dir,f'tile_{step}_grid_{nrow}_{ncol}.tif')
@@ -121,7 +127,7 @@ class Ortophoto():
 
     
     def polygonize(self,step,horizontal_skew=False,vertical_skew=False):
-
+    
         
         name_list=[]
         bound_list=[]
@@ -131,7 +137,7 @@ class Ortophoto():
 
 
         name_list,bound_list=self.tesselation(tiles_dir,step)
-
+    
         # Partial application of the function to avoid raster reopening
         processing=partial(_warp_single_raster_shell,raster=self)
 
@@ -204,9 +210,19 @@ class Ortophoto():
             
         # print(folder_check(pyramid_dir))
         pass
+    def cloneBand(self,image,dst_filename,fileformat = "GTiff"):
+        driver = gdal.GetDriverByName(fileformat)
+        ndvi_ds= driver.Create(dst_filename, xsize=image.shape[1], ysize=image.shape[0],
+                    bands=1, eType=gdal.GDT_Byte)
+        ndvi_ds.SetGeoTransform(self.GT)
+        ndvi_ds.SetProjection(self.dstSRS_wkt)
+        ndvi_ds.GetRasterBand(1).WriteArray(image)
+        ndvi_ds=None
     
-             
+class VectorDataset():
     
+    pass
+
 
 
 # if __name__=='__main__':
