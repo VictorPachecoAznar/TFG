@@ -108,15 +108,16 @@ class Ortophoto():
         metric_x=step*self.X_pixel
         metric_y=step*self.Y_pixel
 
-        cols=abs(int(self.width/metric_x))#+1
-        rows=abs(int(self.height/metric_y))#+1
+        cols=abs(int(self.width/metric_x))
+        rows=abs(int(self.height/metric_y))
+        zcols,zrows =int(log(cols,10))+1, int(log(rows,10))+1
 
         name_list,bound_list=[],[]
         ncol,nrow=0,0
         step=int(step)
         for i in range(cols):
             for j in range(rows):
-                name=os.path.join(dir,f'tile_{step}_grid_{nrow}_{ncol}.tif')
+                name=os.path.join(dir,f'tile_{step}_grid_{str(nrow).zfill(zrows)}_{str(ncol).zfill(zcols)}.tif')
                 bounds=(self.X_min+metric_x*i,self.Y_max+metric_y*(j+1),self.X_min+metric_x*(i+1),self.Y_max+metric_y*j)
                 name_list.append(name)
                 bound_list.append(bounds) 
@@ -197,7 +198,9 @@ class Ortophoto():
             xRes,yRes=self.X_pixel*mult,self.Y_pixel*mult
 
             directory=dirs[layer]
+            print(tile_size,layer,xRes)
             name_list,bound_list=self.tesselation(directory,tile_size)
+
             self.explore(bound_list,tile_size)
             generalize=partial(image_loaded_generalization,xRes=xRes,yRes=yRes)
 
