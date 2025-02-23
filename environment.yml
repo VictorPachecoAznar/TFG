@@ -1,4 +1,4 @@
-name: clean_env
+name: clean_env_cuda
 channels:
   - conda-forge
   - pkgs/main
