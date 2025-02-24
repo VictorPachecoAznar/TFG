@@ -14,8 +14,6 @@ DATA_DIR=os.path.join(BASE_DIR,'data')
 SCRIPTS_DIR=os.path.join(BASE_DIR,'scripts')
 STATIC_DIR=os.path.join(BASE_DIR,'static')
 
-
-
 def folder_check(dir):
     if os.path.exists(dir):
         print(f'{dir} correctly there!')
@@ -53,17 +51,14 @@ def bounds2wkt(bounds):
 [folder_check(dir) for dir in  [DATA_DIR,BASE_DIR,SCRIPTS_DIR,STATIC_DIR]]
 class Ortophoto():
 
-    def __init__(self,route=None,raster=None,crs=25831):
-        if raster is None  and route is None:
+    def __init__(self,route=None,crs=25831):
+        if route is None:
             print('raster wasn\'t kiaded')
             return None
         else:
             try:
                 self.raster=gdal.Open(route)
             except:
-                if raster is not None:
-                    self.raster=raster
-                else:
                     return None
             
             self.raster_path=route
@@ -76,7 +71,7 @@ class Ortophoto():
             self.pixel_height=self.raster.RasterYSize
             self.crs=crs
             self.wkt=self.get_wkt()
-            self.getSRS()
+            self.dstSRS_wkt=self.getSRS()
 
     def __repr__(self):
         ''''
@@ -99,10 +94,16 @@ class Ortophoto():
     def getSRS(self):
         srs = osr.SpatialReference()
         srs.ImportFromEPSG(self.crs)
-        self.dstSRS_wkt = srs.ExportToWkt()
+        dstSRS_wkt = srs.ExportToWkt()
+        return dstSRS_wkt
         
     def get_wkt(self):
         return f"POLYGON(({self.X_min} {self.Y_min},{self.X_max} {self.Y_min},{self.X_max} {self.Y_max},{self.X_min} {self.Y_max},{self.X_min} {self.Y_min}))"
+
+    @staticmethod
+    def nice_write(num):
+        '''Devuelve los ceros necesarios para la función zfill que permiten ordenar los números'''
+        return int(log(num,10))+1
 
     def tesselation(self,dir,step):
         metric_x=step*self.X_pixel
@@ -110,7 +111,8 @@ class Ortophoto():
 
         cols=abs(int(self.width/metric_x))
         rows=abs(int(self.height/metric_y))
-        zcols,zrows =int(log(cols,10))+1, int(log(rows,10))+1
+
+        zcols,zrows =self.nice_write(cols), self.nice_write(rows)
 
         name_list,bound_list=[],[]
         ncol,nrow=0,0
@@ -187,7 +189,7 @@ class Ortophoto():
             print('LA TESELA PEDIDA NO ES DE UN TAMAÑO SUFICIENTE')
 
         pyramid_dir=folder_check(os.path.join(DATA_DIR,os.path.basename(self.raster_path).split('.')[0])+'_pyramid')
-        dirs=[folder_check(os.path.join(pyramid_dir,f'subset{i}')) for i in range(depth+1)]
+        dirs=[folder_check(os.path.join(pyramid_dir,f'subset_{str(i).zfill(self.nice_write(depth))}')) for i in range(depth+1)]
         image_loaded_generalization=partial(_generalize_single_raster,raster=self)             
 
 
@@ -198,7 +200,6 @@ class Ortophoto():
             xRes,yRes=self.X_pixel*mult,self.Y_pixel*mult
 
             directory=dirs[layer]
-            print(tile_size,layer,xRes)
             name_list,bound_list=self.tesselation(directory,tile_size)
 
             self.explore(bound_list,tile_size)
@@ -221,19 +222,56 @@ class Ortophoto():
         ndvi_ds.SetProjection(self.dstSRS_wkt)
         ndvi_ds.GetRasterBand(1).WriteArray(image)
         ndvi_ds=None
+class Tile(Ortophoto):
+    def __init__(self,route,crs=25831):
+        super().__init__(route,crs)
+        self.original_size,self.row,self.col=self.get_tile_row()
+        self.pyramid_layer=int(os.path.basename(os.path.dirname(self.raster_path)).split('_')[1])
+        self.pyramid=os.path.dirname(os.path.dirname(self.raster_path))
+        self.pyramid_depth=len(os.listdir(self.pyramid))
+        #self.children=self.get_children()
+        
+    def get_tile_row(self):
+        metadata_list=os.path.basename(self.raster_path).split('.')[0].split('_')
+        original_size,row,col=int(metadata_list[1]),int(metadata_list[3]),int(metadata_list[4])
+        return  original_size,row,col
     
+    def get_children(self):
+        base=self.pyramid_layer
+        out_list=[]
+        current_siblings=len(os.listdir(os.path.join(self.pyramid,f'subset_{self.pyramid_layer}')))
+        for k in range(1,self.pyramid_depth-base):
+            print(self.original_size/(2**k))
+            i_min=self.row*2**k
+            i_max=i_min+2**k-1
+            j_min=self.col*2**k
+            j_max=j_min+2**k-1
+            current=[]
+            for l in range(j_min,j_max+1):
+                for m in range(i_min,i_max+1):
+                    current.append((str(m).zfill(self.nice_write(i_max)),str(l).zfill(self.nice_write(j_max))))
+            
+            out_list.append([os.path.join(self.pyramid,f'subset_{self.pyramid_layer+k}',f'tile_{int(self.original_size/(2**k))}_grid_{i}_{j}.tif') for i,j in current])
+        self.children=out_list
+        return out_list
+    
+    def get_siblings(self):
+        base=self.pyramid_layer
+        size=self.original_size
+        i_min=self.row+self.row%-2
+        j_min=self.col+self.col%-2
+        i_max=i_min+1
+        j_max=j_min+1
+        sibling_list=[(i_min,j_min),(i_max,j_min),(i_min,j_max),(i_max,j_max)]
+
+        candidates=[os.path.join(self.pyramid,f'subset_{self.pyramid_layer}',f'tile_{self.original_size}_grid_{i}_{j}.tif') for i,j in sibling_list]
+        return [c for c in candidates if os.path.exists(c)]
+
+
+
+        
+
+        
 class VectorDataset():
     
     pass
-
-
-
-# if __name__=='__main__':
-
-#     t0=time()
-#     [folder_check(dir) for dir in  [DATA_DIR,BASE_DIR,SCRIPTS_DIR]]
-#     base_image = Ortophoto(os.path.join(DATA_DIR,'ORTO_PORT.tif'))
-#     print(base_image.Y_pixel)
-#     base_image.polygonize(1024)
-#     t1=time()
-#     print(f'TIME OCURRED:{t1-t0}'

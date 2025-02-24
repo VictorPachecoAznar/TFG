@@ -8,7 +8,6 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(root_dir)
 
 from pruebas_samgeo import *
-
 if __name__=="__main__":
     t0=time()
     complete_image=Ortophoto(os.path.join(DATA_DIR,'ORTO_ZAL_BCN.TIF'))           
