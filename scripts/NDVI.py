@@ -24,7 +24,7 @@ if __name__=="__main__":
     red=mat[3].astype(np.float64)
     ndvi=safe_divide(nir-red,nir+red)
     ndvi=np.nan_to_num(ndvi,-99999)
-    binary=np.where(ndvi>0.5,255,0)
+    binary=np.where(ndvi>0.2,255,0)
 
     image=binary.astype(np.uint8)
 
