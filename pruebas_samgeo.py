@@ -1,4 +1,4 @@
-from osgeo import gdal, osr
+from osgeo import gdal, osr,ogr
 import os
 import subprocess
 from concurrent.futures import ProcessPoolExecutor
@@ -6,6 +6,7 @@ from functools import partial
 from time import time
 from math import sqrt,log
 import geopandas as gpd
+import numpy as np
 
 #from fire import Fire
 
@@ -47,31 +48,36 @@ def bounds2wkt(bounds):
     poly_str = f"POLYGON(({X_min} {Y_min},{X_max} {Y_min},{X_max} {Y_max},{X_min} {Y_max},{X_min} {Y_min}))"
     return poly_str
 
+def last_element(list):
+    smallest_index=len(list)
+    if smallest_index!=0:
+        return list[smallest_index-1]
+    else:
+        return list
 
 [folder_check(dir) for dir in  [DATA_DIR,BASE_DIR,SCRIPTS_DIR,STATIC_DIR]]
 class Ortophoto():
 
-    def __init__(self,route=None,crs=25831):
-        if route is None:
-            print('raster wasn\'t kiaded')
-            return None
-        else:
-            try:
-                self.raster=gdal.Open(route)
-            except:
-                    return None
+    def __init__(self,path=None,crs=25831):
+        try:
+            valid=os.path.exists(path)
+            if valid:
+                self.raster=gdal.Open(path)
+        except:
+            exit
             
-            self.raster_path=route
-            self.GT=[self.X_min, self.X_pixel, self.X_spin, self.Y_max, self.Y_spin, self.Y_pixel]=self.raster.GetGeoTransform()
-            self.X_max = self.X_min + self.X_pixel * self.raster.RasterXSize
-            self.Y_min = self.Y_max + self.Y_pixel * self.raster.RasterYSize
-            self.width=self.X_max-self.X_min
-            self.height=self.Y_max-self.Y_min
-            self.pixel_width=self.raster.RasterXSize
-            self.pixel_height=self.raster.RasterYSize
-            self.crs=crs
-            self.wkt=self.get_wkt()
-            self.dstSRS_wkt=self.getSRS()
+        self.raster_path=path
+        self.GT=[self.X_min, self.X_pixel, self.X_spin, self.Y_max, self.Y_spin, self.Y_pixel]=self.raster.GetGeoTransform()
+        self.X_max = self.X_min + self.X_pixel * self.raster.RasterXSize
+        self.Y_min = self.Y_max + self.Y_pixel * self.raster.RasterYSize
+        self.width=self.X_max-self.X_min
+        self.height=self.Y_max-self.Y_min
+        self.area=self.width*self.height
+        self.pixel_width=self.raster.RasterXSize
+        self.pixel_height=self.raster.RasterYSize
+        self.crs=crs
+        self.wkt=self.get_wkt()
+        self.dstSRS_wkt=self.getSRS()
 
     def __repr__(self):
         ''''
@@ -142,7 +148,7 @@ class Ortophoto():
         name_list,bound_list=self.tesselation(tiles_dir,step)
     
         # Partial application of the function to avoid raster reopening
-        processing=partial(_warp_single_raster_shell,raster=self)
+        processing=partial(_warp_single_raster,raster=self)
 
         # PARALELIZADO CON MAP REDUCE
         with ProcessPoolExecutor() as executor:
@@ -222,37 +228,79 @@ class Ortophoto():
         ndvi_ds.SetProjection(self.dstSRS_wkt)
         ndvi_ds.GetRasterBand(1).WriteArray(image)
         ndvi_ds=None
+
+    def find_intersection_centroid(self,gdf):
+        ''' 
+        Interseca una imagen con un gdf y devuelve el punto central de la intersección
+        '''
+        s1=gdf['geometry']
+        s3=gpd.GeoSeries.from_wkt([self.wkt],crs=self.crs)
+        puntos_inside=s1.intersection(s3[0])
+        newdf=gpd.GeoDataFrame(geometry=puntos_inside,crs=self.crs)
+        geo_prompt=newdf[newdf['geometry'].area==newdf['geometry'].area.max()].reset_index(drop=True)['geometry'][0].centroid
+        if geo_prompt.is_empty==False:
+            coords= [geo_prompt.x,geo_prompt.y]
+            return coords
+
+class Pyramid():
+    def __init__(self,path):
+        self.pyramid=path
+        self.pyramid_depth=(os.listdir(self.pyramid))
+
 class Tile(Ortophoto):
-    def __init__(self,route,crs=25831):
-        super().__init__(route,crs)
+    def __init__(self,path,crs=25831):
+        super().__init__(path,crs)
         self.original_size,self.row,self.col=self.get_tile_row()
         self.pyramid_layer=int(os.path.basename(os.path.dirname(self.raster_path)).split('_')[1])
         self.pyramid=os.path.dirname(os.path.dirname(self.raster_path))
         self.pyramid_depth=len(os.listdir(self.pyramid))
         #self.children=self.get_children()
         
-    def get_tile_row(self):
-        metadata_list=os.path.basename(self.raster_path).split('.')[0].split('_')
+    def get_tile_row(self,raster=None):
+        if raster is None:
+            raster=self.raster_path
+        metadata_list=os.path.basename(raster).split('.')[0].split('_')
         original_size,row,col=int(metadata_list[1]),int(metadata_list[3]),int(metadata_list[4])
         return  original_size,row,col
+        
+    def get_n_rows_cols(self):
+        current_siblings=os.listdir(os.path.join(self.pyramid,f'subset_{self.pyramid_layer}'))
+        init_size,n_row,n_col=self.get_tile_row(current_siblings[len(current_siblings)-1])
+        return n_row,n_col
     
     def get_children(self):
         base=self.pyramid_layer
         out_list=[]
-        current_siblings=len(os.listdir(os.path.join(self.pyramid,f'subset_{self.pyramid_layer}')))
+        n_row,n_col=self.get_n_rows_cols()
         for k in range(1,self.pyramid_depth-base):
-            print(self.original_size/(2**k))
             i_min=self.row*2**k
             i_max=i_min+2**k-1
             j_min=self.col*2**k
             j_max=j_min+2**k-1
             current=[]
-            for l in range(j_min,j_max+1):
-                for m in range(i_min,i_max+1):
-                    current.append((str(m).zfill(self.nice_write(i_max)),str(l).zfill(self.nice_write(j_max))))
             
-            out_list.append([os.path.join(self.pyramid,f'subset_{self.pyramid_layer+k}',f'tile_{int(self.original_size/(2**k))}_grid_{i}_{j}.tif') for i,j in current])
+            for l in range(j_min,j_max+1): 
+                for m in range(i_min,i_max+1):
+                    current.append((str(m).zfill(self.nice_write((n_row+1)*2**k)),str(l).zfill(self.nice_write((n_col+1)*2**k))))
+            
+            out_list.append([os.path.join(self.pyramid,f'subset_{base+k}',f'tile_{int(self.original_size/(2**k))}_grid_{i}_{j}.tif') for i,j in current])
         self.children=out_list
+        #self.smallest_children=last_element(out_list)
+        return out_list
+        
+    def get_parents(self):
+        base=self.pyramid_layer
+        out_list=[]
+        n_row,n_col=self.get_n_rows_cols()
+
+        for k in range(1,base+1):
+            i=int(self.row/2**k)
+            j=int(self.col/2**k)
+            current=[]
+            current.append((str(i).zfill(self.nice_write((n_row+1)/2**k)),str(j).zfill(self.nice_write((n_col+1)/2**k))))
+            out_list.append([os.path.join(self.pyramid,f'subset_{base-k}',f'tile_{int(self.original_size*(2**k))}_grid_{i}_{j}.tif') for i,j in current])
+        self.parents=out_list
+        #self.biggest_parent=last_element(out_list)
         return out_list
     
     def get_siblings(self):
@@ -263,15 +311,21 @@ class Tile(Ortophoto):
         i_max=i_min+1
         j_max=j_min+1
         sibling_list=[(i_min,j_min),(i_max,j_min),(i_min,j_max),(i_max,j_max)]
-
-        candidates=[os.path.join(self.pyramid,f'subset_{self.pyramid_layer}',f'tile_{self.original_size}_grid_{i}_{j}.tif') for i,j in sibling_list]
-        return [c for c in candidates if os.path.exists(c)]
-
-
-
+        n_row,n_col=self.get_n_rows_cols()
+        candidates=[os.path.join(self.pyramid,f'subset_{self.pyramid_layer}',f'tile_{self.original_size}_grid_{str(i).zfill(self.nice_write(n_row+1))}_{str(j).zfill(self.nice_write(n_col+1))}.tif') for i,j in sibling_list]
         
+        self.siblings= [c for c in candidates if os.path.exists(c)]
+        return self.siblings
 
         
 class VectorDataset():
+    def __init__(self,path):
+        pass
+
+    def curve_geometry(self):
+        layer=rotonda.GetLayer()
+        for feature in layer:
+            geometry=feature.GetGeometryRef()
     
-    pass
+        curva=geometry.GetCurveGeometry()
+    pass    

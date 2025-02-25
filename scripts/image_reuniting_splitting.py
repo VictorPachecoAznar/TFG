@@ -12,10 +12,10 @@ from pruebas_samgeo import *
 shapely.Polygon.interpolate
 import scipy.interpolate
 import numpy as np
+import pandas as pd
 if __name__=="__main__":
 
     t0=time()
-
 
     gdf=gpd.read_file(os.path.join(BASE_DIR,'collab','rotonda.geojson'))
 
@@ -26,9 +26,17 @@ if __name__=="__main__":
     #base_image.polygonize(1024)
     from math import isnan
 
-    
+    exterior=list(gdf['geometry'][0].convex_hull.exterior.coords)
+
     x=pd.Series([i for (i,j) in gdf['geometry'][0].convex_hull.exterior.coords])
     y=pd.Series([j for (i,j) in gdf['geometry'][0].convex_hull.exterior.coords])
+
+    vectorTranslate=gdal.VectorTranslateOptions(geometryType='CONVERT_TO_CURVE')
+    gdal.VectorTranslate()
+
+    gdalDriver=ogr.GetDriverByName('GeoJSON')
+    rotonda=gdalDriver.Open(os.path.join(BASE_DIR,'collab','rotonda.geojson'))
+
 
     df=pd.DataFrame({'x':x,'y':y})
     df['GRAD']=np.gradient(df['y'],df['x'])
