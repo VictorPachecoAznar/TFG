@@ -38,7 +38,9 @@ if __name__=="__main__":
 
     #a=f1(file=ejemplo,text_prompt='libro')
 
-
+gpd.GeoDataFrame(geometry=gpd.GeoSeries.from_wkt(wkts),crs=25831)
+gdf.explore()
+m.save(os.path.join(STATIC_DIR),'curve_poly.html')
     # wkts=[]
     # for i in range(len(t.get_children())):
     #      for image in t.children[i]:

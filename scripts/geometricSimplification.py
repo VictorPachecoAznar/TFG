@@ -26,7 +26,7 @@ if __name__=="__main__":
 
     print(first_image.get_parents()[3][0])
     print(Tile(first_image.get_parents()[3][0]).get_siblings())
-    
+    rotonda=VectorDataset(os.path.join(BASE_DIR,'collab','rotonda.geojson'))
     gdf=gpd.read_file(os.path.join(BASE_DIR,'collab','rotonda.geojson'))
     # gdf=gpd.read_file(os.path.join(DATA_DIR,'multipolygon.shp'))
     

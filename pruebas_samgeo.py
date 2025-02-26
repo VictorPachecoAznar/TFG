@@ -15,6 +15,7 @@ DATA_DIR=os.path.join(BASE_DIR,'data')
 SCRIPTS_DIR=os.path.join(BASE_DIR,'scripts')
 STATIC_DIR=os.path.join(BASE_DIR,'static')
 
+driverDict={'tif':'GTiff','geojson':'GeoJSON'}
 def folder_check(dir):
     if os.path.exists(dir):
         print(f'{dir} correctly there!')
@@ -320,12 +321,17 @@ class Tile(Ortophoto):
         
 class VectorDataset():
     def __init__(self,path):
+        self.vector_path=path
+        extension=last_element(os.path.basename(path).split('.'))
+        self.driver=ogr.GetDriverByName(driverDict[extension])
         pass
 
     def curve_geometry(self):
-        layer=rotonda.GetLayer()
+        dataset=self.driver.Open(self.vector_path)
+        layer=dataset.GetLayer()
+        curvas=[]
         for feature in layer:
             geometry=feature.GetGeometryRef()
-    
-        curva=geometry.GetCurveGeometry()
+            curvas.append(geometry.GetCurveGeometry())
+            
     pass    
