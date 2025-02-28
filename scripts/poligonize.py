@@ -13,6 +13,6 @@ if __name__=="__main__":
     [folder_check(dir) for dir in  [DATA_DIR,BASE_DIR,SCRIPTS_DIR]]
     base_image = Ortophoto(os.path.join(DATA_DIR,'ORTO_PORT.tif'))
     print(base_image.Y_pixel)
-    base_image.polygonize(1024)
+    #base_image.polygonize(1024)
     t1=time()
     print(f'TIME OCURRED:{t1-t0}')

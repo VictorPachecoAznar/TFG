@@ -7,7 +7,7 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 # Add the root directory to sys.path
 sys.path.append(root_dir)
 
-from pruebas_samgeo import *
+#from pruebas_samgeo import *
 import geopandas as gpd
 import shapely
 

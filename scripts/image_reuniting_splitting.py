@@ -27,6 +27,41 @@ if __name__=="__main__":
     from math import isnan
 
     exterior=list(gdf['geometry'][0].convex_hull.exterior.coords)
+    np_exterior=np.array(exterior)
+    x=np_exterior[:,0]
+    y=np_exterior[:,1]
+    geometries=gpd.GeoDataFrame(data={'x':x,'y':y},geometry=gpd.points_from_xy(x,y),crs=gdf.crs)
+
+    def circle(x,px,py):
+        return np.array((px-x[0])**2+(py-x[1])**2-x[2]**2)
+    
+    pred_center=gdf['geometry'][0].centroid
+
+    f=least_squares(circle,x0=[pred_center.x,pred_center.y,10],args=(x,y),method='lm')
+    
+    a,b,r=float(f.x[0]),float(f.x[1]),float(f.x[2])
+    
+    def get_circle_coords(angle,R,a,b):
+        x=a+R*sin(angle)
+        y=b+R*cos(angle)
+        return (x,y)
+    
+    threshold=0.001
+    angles=np.linspace(0,2*pi,int(2*pi/asin(threshold/r)+1))
+
+    compute_circle=partial(get_circle_coords,R=r,a=a,b=b)
+    puntos_2=list(map(compute_circle,angles))
+    p=np.array(puntos_2)
+    
+    polygon=shapely.Polygon(puntos_2)
+
+    rounded_p=gpd.GeoDataFrame(geometry=[polygon],crs=gdf.crs)
+    rounded_p.to_file(os.path.join(BASE_DIR,'out','rotonda_redonda_poly_5cm.geojson'))
+    
+    x=p[:,0]
+    y=p[:,1]
+    rounded=gpd.GeoDataFrame(data={'x':x,'y':y},geometry=gpd.points_from_xy(x,y),crs=gdf.crs)
+    rounded.to_file(os.path.join(BASE_DIR,'out','rotonda_redonda.geojson'))
 
     x=pd.Series([i for (i,j) in gdf['geometry'][0].convex_hull.exterior.coords])
     y=pd.Series([j for (i,j) in gdf['geometry'][0].convex_hull.exterior.coords])
