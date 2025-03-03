@@ -12,7 +12,18 @@ import cv2 as cv
 import numpy as np
 
 def safe_divide(a,b):
+    """Divides float numpy arrays avoiding zero division errors
+
+    Args:
+        a (np.array (dtype:float*)): Numeric array of the same 
+        b (np.array (dtype:float*)): Contains numbers
+
+    Returns:
+        np.array: array with the divided values, and zero where b=0.
+        
+    """
     return np.divide(a,b,out=np.zeros_like(a),where=b!=0)
+
 
 if __name__=="__main__":
     t0=time()

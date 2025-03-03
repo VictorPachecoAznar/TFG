@@ -24,16 +24,17 @@ class VectorDataset():
         self.vector_path=path
         extension=(os.path.basename(path).split('.'))[-1]
         self.driver=ogr.GetDriverByName(driverDict[extension])
+        self.dataset=self.driver.Open(self.vector_path)
+        self.layer=self.dataset.GetLayer()
         pass
 
     def curve_geometry(self):
-        dataset=self.driver.Open(self.vector_path)
-        layer=dataset.GetLayer()
         curvas=[]
-        for feature in layer:
+        for feature in self.layer:
             geometry=feature.GetGeometryRef()
+
             outjson=geometry.ExportToJson()
-            curvas.append(geometry.GetCurveGeometry())
+            #curvas.append(geometry.GetCurveGeometry())
         return curvas
 
     def circle(x,px,py):

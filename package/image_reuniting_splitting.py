@@ -17,11 +17,15 @@ from time import time
 
 from functools import partial
 from scipy.optimize import least_squares
-from package.vector_utilities import circle
+from package.vector_utilities import circle,VectorDataset
 
 if __name__=="__main__":
 
     t0=time()
+
+    cir=VectorDataset(os.path.join(BASE_DIR,'collab','rotonda.geojson'))
+    
+    cir.curve_geometry()
 
     gdf=gpd.read_file(os.path.join(BASE_DIR,'collab','rotonda.geojson'))
 

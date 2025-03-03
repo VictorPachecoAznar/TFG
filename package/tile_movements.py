@@ -27,7 +27,12 @@ if __name__=="__main__":
     
     #ejemplo='tile_16384_grid_0_1.tif'
     ejemplo='tile_2048_grid_5_00.tif'
+    ejemplo2='tile_2048_grid_5_01.tif'
+
     t=Tile(path=os.path.join(r,ejemplo))
+    t2=Tile(os.path.join(r,ejemplo2))
+
+    t==t2
     t.get_children()
     t.get_parents()
     t.get_siblings()

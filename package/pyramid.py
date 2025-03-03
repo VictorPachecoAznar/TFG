@@ -7,12 +7,12 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 # Add the root directory to sys.path
 sys.path.append(root_dir)
 
-from .raster_utilities import Ortophoto
-from .__init__ import *
+from package.raster_utilities import Ortophoto
+from package.__init__ import *
 
 if __name__=="__main__":
-    t0=time()
-    complete_image=Ortophoto(os.path.join(DATA_DIR,'ORTO_ZAL_BCN.tif'))       
+    t0=time.time()
+    complete_image=Ortophoto(os.path.join(DATA_DIR,'ORTO_PORT.tif'))       
 
     # DEGRADE RESOLUTION
     #gdal.Warp(os.path.join(dirs[0],'out.tif'),os.path.join(DATA_DIR,'tiles_1024_safe','result_1024_grid_58_98.tif'),xRes=0.1,yRes=0.1)

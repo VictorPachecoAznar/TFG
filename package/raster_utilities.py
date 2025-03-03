@@ -93,10 +93,16 @@ class Ortophoto():
 
     @staticmethod
     def mosaic_rasters(im_input,name='tbf.tif'):
+        '''
+        Returns the ortophoto object of the addition of the imput elements' iterable
+        
+        :param im_input: a list of Ortophoto objects or paths
+        :type im_input
+        '''
         valid_images=[]
 
         def check_image(valid_images,im):
-            if type(im)==str:
+            if isinstance(im,str):
                 if os.path.exists(im):
                     valid_images.append(im)
                     return valid_images
@@ -106,9 +112,9 @@ class Ortophoto():
                         valid_images.append(im)
                         return valid_images
                 except AttributeError:
-                    print(f'{im} COULD NOT BE ADDED AS IT IS NOT A VALID PATH OR ORTOPHOTO/TILE OBJECT.')
+                    raise (f'{im} COULD NOT BE ADDED AS IT IS NOT A VALID PATH OR ORTOPHOTO/TILE OBJECT.')
 
-        if isinstance(im_input,Iterable) and type(im_input)!=str:
+        if isinstance(im_input,Iterable) and not isinstance(im_input,str):
             for im in im_input:
                 valid_images=check_image(valid_images,im)
         else:
@@ -212,6 +218,8 @@ class Ortophoto():
 
 
     def create_pyramid(self,lowest_pixel_size):
+
+
         largest_side=max(self.pixel_width,self.pixel_height)
         smallest_side=min(self.pixel_width,self.pixel_height)    
 
@@ -252,8 +260,20 @@ class Ortophoto():
             
         # print(folder_check(pyramid_dir))
         pass
-    def cloneBand(self,image,dst_filename,fileformat = "GTiff"):
-        driver = gdal.GetDriverByName(fileformat)
+
+    def cloneBand(self,image,dst_filename,driver_name = None):
+        """Creates a new raster file just like the current, given a matrix 
+
+        Args:
+            image (np.array): [[row, col],[row,col],...]
+            dst_filename (str): Absolute path of the file to be written to
+            driver_name (str, optional): GDAL-Driver to run the create command.If not specified it will guess from the dst_filename, or if it fails as GTiff. Defaults to None.
+        """
+        
+        if driver_name is None:
+            extension=(os.path.basename(dst_filename).split('.'))[-1]
+            driver_name=driverDict.get(extension,driverDict['tif'])
+        driver = gdal.GetDriverByName(driver_name)
         ndvi_ds= driver.Create(dst_filename, xsize=image.shape[1], ysize=image.shape[0],
                     bands=1, eType=gdal.GDT_Byte)
         ndvi_ds.SetGeoTransform(self.GT)
@@ -275,46 +295,82 @@ class Ortophoto():
             return coords
 
 class Tile(Ortophoto):
-    def __init__(self,path,crs=25831):
+    '''Class Tile(Ortophoto)
+    Child class from parent Ortophoto
+    '''
+    def __init__(self,path:str,crs=25831):
+        '''
+        Args:   path (str): Complete path to the tile as a string
+                crs (int=25831): CRS of the tile to be loaded
+        '''
         super().__init__(path,crs)
-        self.original_size,self.row,self.col=self.get_tile_row()
+        self.original_size,self.row,self.col=self.get_row_col()
         self.pyramid_layer=int(os.path.basename(os.path.dirname(self.raster_path)).split('_')[1])
         self.pyramid=os.path.dirname(os.path.dirname(self.raster_path))
         self.pyramid_depth=len(os.listdir(self.pyramid))
         #self.children=self.get_children()
 
-    def __eq__(self,t2: Ortophoto) -> bool:
-        if t2.isinstance(Ortophoto):
+    def __eq__(self,t2: Ortophoto):
+        """
+        Args:   self(Tile)
+                t2(Ortophoto): Tile to be compared
+        Returns:
+                bool, True if in the same layer of the pyramid
+        Exceptions:
+                Raise if not the instance of an Ortophoto class """              
+        
+        if isinstance(t2,(Ortophoto,Tile)):
             return self.pyramid_layer==t2.pyramid_layer
         else:
-            raise('')
+            raise('NOT AN INSTANCE OF THE CLASS ORTOPHOTO OR TILE')
 
-    def __gt__(self,t2):
-        return self.pyramid_layer>t2.pyramid_layer
+    # def __gt__(self,t2):
+    #     return self.pyramid_layer>t2.pyramid_layer
     
-    def __lt__(self,t2):
-        return self.pyramid_layer<t2.pyramid_layer
+    # def __lt__(self,t2):
+    #     return self.pyramid_layer<t2.pyramid_layer
 
-    def __le__(self,t2):
-        return self.pyramid_layer<=t2.pyramid_layer
+    # def __le__(self,t2):
+    #     return self.pyramid_layer<=t2.pyramid_layer
     
-    def __ge__(self,t2):
-        return self.pyramid_layer>t2.pyramid_layer
+    # def __ge__(self,t2):
+    #     return self.pyramid_layer>t2.pyramid_layer
 
         
-    def get_tile_row(self,raster=None):
-        if raster is None:
-            raster=self.raster_path
+    def get_row_col(self):
+        """Get the original size, row and col of a certain tile
+
+        Args:
+            raster (_type_, optional): Raster path to be added. Defaults to None.
+
+        Returns:
+            int: original size of the parent class from where it has been resampled
+            int: row in the current pyramid layer
+            int: col in the current pyramid layer
+        """
+        raster=self.raster_path
         metadata_list=os.path.basename(raster).split('.')[0].split('_')
         original_size,row,col=int(metadata_list[1]),int(metadata_list[3]),int(metadata_list[4])
         return  original_size,row,col
         
     def get_n_rows_cols(self):
+        """Get the number of rows and columns of a certain level in a pyramid
+
+        Returns:
+            int: number of rows at the current level
+            int: number of columns at the current level
+        """
         current_siblings=os.listdir(os.path.join(self.pyramid,f'subset_{self.pyramid_layer}'))
-        init_size,n_row,n_col=self.get_tile_row(current_siblings[len(current_siblings)-1])
+        init_size,n_row,n_col=self.get_row_col(current_siblings[len(current_siblings)-1])
         return n_row,n_col
     
     def get_children(self):
+        """Retrieves the tiles which have a higher resolution for the same point (lower levels of the pyramid for a given tile)
+
+        Returns:
+            list: 2D-list. Each list contains a level of deepness, from closer to the current level until the lowest layer of the pyramid.
+        """
+
         base=self.pyramid_layer
         out_list=[]
         n_row,n_col=self.get_n_rows_cols()
@@ -335,6 +391,12 @@ class Tile(Ortophoto):
         return out_list
         
     def get_parents(self):
+        """Retrieves the tiles which have a higher resolution for the same point (lower levels of the pyramid for a given tile)
+
+        Returns:
+            list: 2D-list. Each list contains a level of deepness, from closer to the current level until the lowest layer of the pyramid.
+        """
+
         base=self.pyramid_layer
         out_list=[]
         n_row,n_col=self.get_n_rows_cols()
@@ -350,6 +412,12 @@ class Tile(Ortophoto):
         return out_list
     
     def get_siblings(self):
+        """Finds the four tiles which come from one level higher in the pyramid. It is equivalent to finding the first parent and looking at its first children 
+
+        Returns:
+            list: A list of the four immediate siblings in the current level of the pyramid
+
+        """
         base=self.pyramid_layer
         size=self.original_size
         i_min=self.row+self.row%-2
@@ -358,7 +426,7 @@ class Tile(Ortophoto):
         j_max=j_min+1
         sibling_list=[(i_min,j_min),(i_max,j_min),(i_min,j_max),(i_max,j_max)]
         n_row,n_col=self.get_n_rows_cols()
-        candidates=[os.path.join(self.pyramid,f'subset_{self.pyramid_layer}',f'tile_{self.original_size}_grid_{str(i).zfill(self.nice_write(n_row+1))}_{str(j).zfill(self.nice_write(n_col+1))}.tif') for i,j in sibling_list]
+        candidates=[os.path.join(self.pyramid,f'subset_{base}',f'tile_{size}_grid_{str(i).zfill(self.nice_write(n_row+1))}_{str(j).zfill(self.nice_write(n_col+1))}.tif') for i,j in sibling_list]
         
         self.siblings= [c for c in candidates if os.path.exists(c)]
         return self.siblings
