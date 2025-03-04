@@ -1,3 +1,4 @@
 ::COMANDA GDAL PARA RECORTES
 ::call gdalwarp -wo NUM_THREADS=ALL_CPUS -te 427000 4574680.8 428638.4 4575500 -wm 5000 "C:/Users/pachecvi/OneDrive - Port de Barcelona/Escritorio/VICTOR/TFG/data/raster_translation/FAV20240413_EPSG25831_5cm_F50_MRSID3.sid" "C:/Users/pachecvi/OneDrive - Port de Barcelona/Escritorio/VICTOR/TFG/data/ORTO_ZAL_BCN.tif"
-call gdalwarp -wo NUM_THREADS=ALL_CPUS -te 427000 4574680.8 428638.4 4575500 -wm 5000 "D:\VICTOR_PACHECO\CUARTO\PROCESADO_IMAGEN\ORTO_PORT.tif" "D:\VICTOR_PACHECO\CUARTO\PROCESADO_IMAGEN\data\ORTO_ZAL_BCN.tif"
+::call gdalwarp -wo NUM_THREADS=ALL_CPUS -te 427000 4574680.8 428638.4 4575500 -wm 5000 "D:\VICTOR_PACHECO\CUARTO\PROCESADO_IMAGEN\ORTO_PORT.tif" "D:\VICTOR_PACHECO\CUARTO\PROCESADO_IMAGEN\data\ORTO_ZAL_BCN.tif"
+::call gdalwarp -wo NUM_THREADS=ALL_CPUS -te 428730 4575479 430000 4576581 -wm 5000 "C:/Users/pachecvi/OneDrive - Port de Barcelona/Escritorio/VICTOR/TFG/data/raster_translation/FAV20240413_EPSG25831_5cm_F50_MRSID3.sid" "C:/Users/pachecvi/OneDrive - Port de Barcelona/Escritorio/VICTOR/TFG/data/ORTO_ME_BCN.tif"
