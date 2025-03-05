@@ -5,7 +5,7 @@ from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from time import time
 from math import sqrt,log,pi,sin,cos,asin
-import geopandas as gpd
+import geopandas as gpd, pandas as pd
 from collections.abc import Iterable
 
 from package import BASE_DIR,DATA_DIR,PACKAGE_DIR,STATIC_DIR,driverDict
@@ -38,6 +38,10 @@ def _generalize_single_raster(name,bounds,raster,xRes,yRes):
     options= gdal.WarpOptions(dstSRS=raster.dstSRS_wkt,dstNodata=0,outputBounds=bounds,outputBoundsSRS=raster.dstSRS_wkt,multithread=True,xRes=xRes,yRes=yRes,resampleAlg='bilinear')
     gdal.Warp(name,raster.raster,options=options)
 
+def _simplify_single_raster(name,xRes,yRes,bounds,raster):
+    options= gdal.WarpOptions(dstSRS=raster.dstSRS_wkt,dstNodata=0,outputBounds=bounds,outputBoundsSRS=raster.dstSRS_wkt,multithread=True,xRes=xRes,yRes=yRes,resampleAlg='bilinear')
+    gdal.Warp(name,raster.raster,options=options)
+
 def closest_base_power(x,power=2):
     return power**int(log(x,power))    
 
@@ -64,6 +68,7 @@ class Ortophoto():
         self.GT=[self.X_min, self.X_pixel, self.X_spin, self.Y_max, self.Y_spin, self.Y_pixel]=self.raster.GetGeoTransform()
         self.X_max = self.X_min + self.X_pixel * self.raster.RasterXSize
         self.Y_min = self.Y_max + self.Y_pixel * self.raster.RasterYSize
+        self.bounds=(self.X_min,self.Y_min,self.X_max,self.Y_max)
         self.width=self.X_max-self.X_min
         self.height=self.Y_max-self.Y_min
         self.area=self.width*self.height
@@ -216,6 +221,23 @@ class Ortophoto():
         m=gdf.explore()
         m.save(os.path.join(STATIC_DIR,f'{tile_size}.html'))
 
+    def create_resolutions(self,depth):
+        resolutions_dir=folder_check(os.path.join(DATA_DIR,os.path.basename(self.raster_path).split('.')[0])+'_resolutions')
+        gen=partial(_simplify_single_raster,raster=self,bounds=self.bounds)
+        args={i:{'Name':os.path.join(folder_check(os.path.join(resolutions_dir,str(int(100*self.X_pixel*2**i))+'cm')),f'{i}.tif'),'xRes':self.X_pixel*2**i,'yRes':self.Y_pixel*2**i} for i in range(depth)}
+        df=pd.DataFrame(args)
+        df=df.transpose()
+        with ProcessPoolExecutor() as executor:
+                results=list(executor.map(gen,df['Name'],df['xRes'],df['yRes']))
+
+    def create_non_parallelized_resolutions(self,depth):
+        resolutions_dir=folder_check(os.path.join(DATA_DIR,os.path.basename(self.raster_path).split('.')[0])+'_resolutions')
+        args={i:{'Name':os.path.join(folder_check(os.path.join(resolutions_dir,str(int(100*self.X_pixel*2**i))+'cm')),f'{i}.tif'),'xRes':self.X_pixel*2**i,'yRes':self.Y_pixel*2**i} for i in range(depth)}
+        df=pd.DataFrame(args)
+        df=df.transpose()
+        for i in range(len(df)):
+            _simplify_single_raster(name=df['Name'][i],xRes=df['xRes'][i],yRes=df['yRes'][i],bounds=self.bounds,raster=self)
+
 
     def create_pyramid(self,lowest_pixel_size):
 
@@ -337,7 +359,7 @@ class Tile(Ortophoto):
     #     return self.pyramid_layer>t2.pyramid_layer
 
         
-    def get_row_col(self):
+    def get_row_col(self,path=None):
         """Get the original size, row and col of a certain tile
 
         Args:
@@ -349,6 +371,11 @@ class Tile(Ortophoto):
             int: col in the current pyramid layer
         """
         raster=self.raster_path
+        if path is not None:
+            if os.path.exists(path):
+                raster=path
+            else:
+                pass
         metadata_list=os.path.basename(raster).split('.')[0].split('_')
         original_size,row,col=int(metadata_list[1]),int(metadata_list[3]),int(metadata_list[4])
         return  original_size,row,col
@@ -360,8 +387,9 @@ class Tile(Ortophoto):
             int: number of rows at the current level
             int: number of columns at the current level
         """
-        current_siblings=os.listdir(os.path.join(self.pyramid,f'subset_{self.pyramid_layer}'))
-        init_size,n_row,n_col=self.get_row_col(current_siblings[len(current_siblings)-1])
+        curdir=os.path.join(self.pyramid,f'subset_{self.pyramid_layer}')
+        current_siblings=os.listdir(curdir)
+        init_size,n_row,n_col=self.get_row_col(os.path.join(curdir,current_siblings[-1]))
         return n_row,n_col
     
     def get_children(self):
