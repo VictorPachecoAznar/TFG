@@ -49,6 +49,7 @@ env/
 *.ecw
 *.sid
 *.qgz
+*.onnx
 
 update_yaml.txt
 
