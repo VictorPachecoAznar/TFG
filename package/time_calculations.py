@@ -14,7 +14,7 @@ comandas=['gdalwarp -te 427314 4574847 428988 4575367 "C:/Users/pachecvi/OneDriv
           'gdalwarp -wo NUM_THREADS=ALL_CPUS -te 427000 4574000 429000 4575500 -wm 5000 "C:/Users/pachecvi/OneDrive - Port de Barcelona/Escritorio/VICTOR/TFG/data/raster_translation/FAV20240413_EPSG25831_5cm_F50_MRSID3.sid" "C:/Users/pachecvi/OneDrive - Port de Barcelona/Escritorio/VICTOR/TFG/data/ORTO_ZAL_BCN_A.tif"',
           'gdalwarp -te 427314 4574847 428988 4575367 "C:/Users/pachecvi/OneDrive - Port de Barcelona/Escritorio/VICTOR/TFG/data/raster_translation/FAV20240413_EPSG25831_5cm_F50_MRSID3.sid" "C:/Users/pachecvi/OneDrive - Port de Barcelona/Escritorio/VICTOR/TFG/data/ORTO_ZAL_BCN_Rm.tif"']
 
-gdalwarp -wo NUM_THREADS=ALL_CPUS -te 427000 4574680.8 428638.4 4575500 -wm 5000 "C:/Users/pachecvi/OneDrive - Port de Barcelona/Escritorio/VICTOR/TFG/data/raster_translation/FAV20240413_EPSG25831_5cm_F50_MRSID3.sid" "C:/Users/pachecvi/OneDrive - Port de Barcelona/Escritorio/VICTOR/TFG/data/ORTO_ZAL_BCN_A.tif"
+'gdalwarp -wo NUM_THREADS=ALL_CPUS -te 427000 4574680.8 428638.4 4575500 -wm 5000 "C:/Users/pachecvi/OneDrive - Port de Barcelona/Escritorio/VICTOR/TFG/data/raster_translation/FAV20240413_EPSG25831_5cm_F50_MRSID3.sid" "C:/Users/pachecvi/OneDrive - Port de Barcelona/Escritorio/VICTOR/TFG/data/ORTO_ZAL_BCN_A.tif"'
 bounds=(427314, 4574847, 428988, 4575367)
 
 #-wo NUM_THREADS=ALL_CPUS

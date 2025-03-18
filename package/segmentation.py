@@ -1,4 +1,4 @@
-from samgeo import SamGeo
+# from samgeo import SamGeo
 import os,sys
 import time
 # Get the root directory
@@ -12,6 +12,8 @@ from package.raster_utilities import *
 
 
 def text_prompt():
+    
+    from samgeo.text_sam import LangSAM
     langSam = LangSAM()
     image=os.path.join(DATA_DIR,'ORTO_ZAL_BCN_pyramid','subset4','tile_1024_grid_08_12.tif')
     langSam.set_image(image)
@@ -41,6 +43,7 @@ def box_prompt():
         sam.set_image(image)
         sam.predict(boxes=boxes, point_crs="EPSG:25831", output=os.path.join(folder_check(os.path.join(OUT_DIR,'sammed')),f"mask{count}.tif"), dtype="uint8")
         count+=1
+        
 if __name__=="__main__":
     #complete_image=Ortophoto(os.path.join(DATA_DIR,'ORTO_ZAL_BCN.TIF'))           
         # DEGRADE RESOLUTION
@@ -53,8 +56,14 @@ if __name__=="__main__":
     # )
     # sam.image_to_image
     t0=time()
-    from samgeo.text_sam import LangSAM
-    box_prompt()
+    boxes=os.path.join(OUT_DIR,'tanks_50c_40iou.geojson')
+    gdf=gpd.read_file(boxes)
+    gdf['WIDTH']=gdf.geometry.convex_hull.bounds['maxx']-gdf.geometry.convex_hull.bounds['minx']
+    gdf['HEIGHT']=gdf.geometry.convex_hull.bounds['maxy']-gdf.geometry.convex_hull.bounds['miny']
+    gdf['ASPECT_RATIO']=gdf['HEIGHT']/gdf['WIDTH']
+    outliars=gdf[(gdf['ASPECT_RATIO']>1.2)|(gdf['ASPECT_RATIO']<0.8)]
+    
+    #box_prompt()
     t1=time()
     print(f'TIEMPO TRANSCURRIDO {t1-t0}')
     print('HELLO WORLD!')

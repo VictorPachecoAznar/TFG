@@ -15,7 +15,7 @@ from package import BASE_DIR,DATA_DIR,PACKAGE_DIR,STATIC_DIR,driverDict
 
 def folder_check(dir):
     if os.path.exists(dir):
-        print(f'{dir} correctly there!')
+        #print(f'{dir} correctly there!')
         return dir
     else:
         os.mkdir(dir)
@@ -97,7 +97,7 @@ class Ortophoto():
          self.raster = gdal.Open(self.raster_path)
 
     @staticmethod
-    def mosaic_rasters(im_input,name='tbf.tif'):
+    def mosaic_rasters(im_input:Iterable,name:str,fetch=False):
         '''
         Returns the ortophoto object of the addition of the imput elements' iterable
         
@@ -129,14 +129,25 @@ class Ortophoto():
             print('NONE OF THE ITEMS TO ADD WAS GOOD ENOUGH')
             return im_input[0]
         else:
-            outname=os.path.join(DATA_DIR,name)
+            root,ext=os.path.splitext(name)
+            if ext=='':
+                ext='.vrt' 
+            outdir=folder_check(os.path.join(DATA_DIR,os.path.dirname(name)))
+            outname=os.path.join(outdir,f'{os.path.basename(root)}{ext}')
             paths=" ".join(['"'+str(i)+'"' for i in valid_images])
-            command=f'gdal_merge -o "{outname}" {paths}'
+            
+            if ext=='.vrt':
+                command=f'gdalbuildvrt -o "{outname}" {paths}'
+            else:
+                command=f'gdal_merge -o "{outname}" {paths}'
             print(command)
             subprocess.call(command)
-            return Ortophoto(outname)
+            if fetch is True:
+                return Ortophoto(outname)
+            else:
+                return outname
 
-    def __add__(self,im_input):
+    def __add__(self,im_input,fetch=True):
         im_input.insert(0,self)
         return self.mosaic_rasters(im_input,name=f'augmented_{self.basename}')
     
@@ -293,7 +304,7 @@ class Ortophoto():
         """
         
         if driver_name is None:
-            extension=(os.path.basename(dst_filename).split('.'))[-1]
+            extension=os.path.splitext(dst_filename)[1]
             driver_name=driverDict.get(extension,driverDict['tif'])
         driver = gdal.GetDriverByName(driver_name)
         ndvi_ds= driver.Create(dst_filename, xsize=image.shape[1], ysize=image.shape[0],
@@ -304,10 +315,17 @@ class Ortophoto():
         ndvi_ds=None
 
     def find_intersection_centroid(self,gdf):
+        """ Intersects an image and a gdf and returns intersection centroid
+
+        Args:
+            gdf (_type_): gpd.GeoDataFrame object, containing a 'geometry' column
+
+        Returns:
+            _type_: _description_
+        """
         ''' 
-        Interseca una imagen con un gdf y devuelve el punto central de la intersección
         '''
-        s1=gdf['geometry']
+        s1=gdf.geometry
         s3=gpd.GeoSeries.from_wkt([self.wkt],crs=self.crs)
         puntos_inside=s1.intersection(s3[0])
         newdf=gpd.GeoDataFrame(geometry=puntos_inside,crs=self.crs)

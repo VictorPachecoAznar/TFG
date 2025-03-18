@@ -1,4 +1,10 @@
 import os
+import sys
+import duckdb
+# import ibis
+# from ibis import _
+# ibis.options.interactive=True
+
 BASE_DIR=os.getenv('BASE_DIR',os.path.dirname(os.path.dirname(__file__)))
 DATA_DIR=os.path.join(BASE_DIR,'data')
 PACKAGE_DIR=os.path.join(BASE_DIR,'package')
@@ -11,3 +17,7 @@ modelDict={'buildings':{'SIZE':256,'PIXEL':40},
            'roads':{'SIZE':512,'PIXEL':20},
             'oil':{'SIZE':512,'SIZE':150}
            }
+
+DUCKDB=duckdb.connect()
+DUCKDB.install_extension('spatial')
+DUCKDB.load_extension('spatial')

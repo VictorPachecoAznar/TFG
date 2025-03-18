@@ -8,6 +8,7 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(root_dir)
 
 from package.raster_utilities import *
+from package import *
 import cv2 as cv
 import numpy as np
 
@@ -35,7 +36,7 @@ if __name__=="__main__":
     red=mat[3].astype(np.float64)
     ndvi=safe_divide(nir-red,nir+red)
     ndvi=np.nan_to_num(ndvi,-99999)
-    binary=np.where(ndvi>0.2,255,0)
+    binary=np.where(ndvi>0.5,255,0)
 
     image=binary.astype(np.uint8)
 
@@ -50,13 +51,15 @@ if __name__=="__main__":
     # if metadata.get(gdal.DCAP_CREATECOPY) == "YES":
     #     print("Driver {} supports CreateCopy() method.".format(fileformat))
 
-    dst_filename=os.path.join(DATA_DIR,'NDVI_RS.TIF')
+    dst_filename=os.path.join(DATA_DIR,'RS_NDVI_COMPLETE.TIF')
     complete_image.cloneBand(image,dst_filename)
-
-
+    dst_geojson=os.path.join(OUT_DIR,'ndvi.geojson')
+    
+    command=f'gdal_polygonize {dst_filename} -f "GeoJSON" {dst_geojson}'
+    subprocess.Popen(command,shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     t1=time()
     print(f'TIEMPO TRANSCURRIDO {t1-t0}')
-    cv.imshow('foto',image)
-    cv.waitKey(0)
+    #cv.imshow('foto',image)
+    #cv.waitKey(0)
 
     #complete_image.create_pyramid(1024)
