@@ -187,13 +187,17 @@ dependencies:
   - pip:
       - appdirs==1.4.4
       - atpublic==5.1
+      - attrs==25.3.0
       - bidict==0.23.1
       - brotli==1.1.0
       - certifi==2025.1.31
       - cffi==1.17.1
       - charset-normalizer==3.4.1
+      - click-plugins==1.1.1
+      - cligj==0.7.2
       - duckdb==1.2.1
       - filelock==3.18.0
+      - fiona==1.10.1
       - graphviz==0.20.3
       - h2==4.2.0
       - hpack==4.1.0
@@ -212,10 +216,14 @@ dependencies:
       - pyarrow-hotfix==0.6
       - pycparser==2.22
       - pygments==2.19.1
+      - pyogrio==0.10.0
+      - pyparsing==3.2.1
+      - pyproj==3.7.1
       - pysocks==1.7.1
       - regex==2024.11.6
       - requests==2.32.3
       - rich==13.9.4
+      - scipy==1.15.2
       - sqlglot==26.0.1
       - toolz==1.0.0
       - typing-extensions==4.12.2
@@ -223,3 +231,4 @@ dependencies:
       - win-inet-pton==1.1.0
       - xxhash==3.5.0
       - zstandard==0.23.0
+prefix: C:\Users\pachecvi\AppData\Local\miniconda3\envs\clean_env_cuda
