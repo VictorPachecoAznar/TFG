@@ -140,7 +140,6 @@ class Ortophoto():
                 command=f'gdalbuildvrt -o "{outname}" {paths}'
             else:
                 command=f'gdal_merge -o "{outname}" {paths}'
-            print(command)
             subprocess.call(command)
             if fetch is True:
                 return Ortophoto(outname)
@@ -251,8 +250,8 @@ class Ortophoto():
 
 
     def create_pyramid(self,lowest_pixel_size):
-
-
+        
+        t0=time()
         largest_side=max(self.pixel_width,self.pixel_height)
         smallest_side=min(self.pixel_width,self.pixel_height)    
 
@@ -263,7 +262,7 @@ class Ortophoto():
         largest_tile=closest_base_power(smallest_side)
         depth=int(log(largest_tile,2))-int(log(lowest_pixel_size,2))
 
-
+        t1=time()
         if depth<=0:
             print('LA TESELA PEDIDA NO ES DE UN TAMAÑO SUFICIENTE')
 
@@ -271,7 +270,10 @@ class Ortophoto():
         dirs=[folder_check(os.path.join(pyramid_dir,f'subset_{str(i).zfill(self.nice_write(depth))}')) for i in range(depth+1)]
         image_loaded_generalization=partial(_generalize_single_raster,raster=self)             
 
-
+        t2=time()
+        print(f'''
+            PREPROCESSING {t1-t0}
+            CALCULATE PARAMETERS{t2-t1}''')
         for layer in range(depth,-1,-1):
             divisor=int(2**layer)
             tile_size=largest_tile/divisor
@@ -279,14 +281,21 @@ class Ortophoto():
             xRes,yRes=self.X_pixel*mult,self.Y_pixel*mult
 
             directory=dirs[layer]
+            t3=time()
+            print(f'preteselation{t3-t2}')
             name_list,bound_list=self.tesselation(directory,tile_size)
-
+            bound_gdf=gpd.GeoDataFrame({'NAME':name_list},geometry=gpd.GeoSeries.from_wkt([bounds2wkt(bound) for bound in bound_list]),crs=25831)
+            bound_gdf.to_file(os.path.join(pyramid_dir,f'subset_{layer}.geojson'))
             self.explore(bound_list,tile_size)
             generalize=partial(image_loaded_generalization,xRes=xRes,yRes=yRes)
 
             with ProcessPoolExecutor() as executor:
                 results=list(executor.map(generalize,name_list,bound_list))
-            
+        t3=time()
+        print(f'''
+            PREPROCESSING {t1-t0}
+            CALCULATE PARAMETERS{t2-t1}
+            FOR LOOP {t3-t2}''')
         # image_ndarray=self.raster.ReadAsArray()
         # for channel in range(image_ndarray.shape[0]):
         #     print(image_ndarray[channel].shape)

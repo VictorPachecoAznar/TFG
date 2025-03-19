@@ -8,7 +8,7 @@ sys.path.append(root_dir)
 
 from package import *
 import geopandas as gpd
-from package.raster_utilities import Ortophoto,Tile
+from package.raster_utilities import Ortophoto,Tile,folder_check
 from concurrent.futures import ProcessPoolExecutor
 import time
 import pandas as pd
@@ -102,16 +102,34 @@ def filter_level(depth):
                     ON m.INDEX=c.row_index''')
     
     fin_gdf=duckdb_2_gdf(final,'predict_geom')
-    
+    return exiters, final
     fin_gdf.to_file(os.path.join(OUT_DIR,'TANKS_AFFECTED_MOSAICS.GEOJSON'))
     
+
+from samgeo import SamGeo
+sam = SamGeo(
+    model_type="vit_h",
+    automatic=False,
+    sam_kwargs=None,
+)
+
 if __name__=="__main__":
     #choose_model
     #model class has optimal resolution attribute
     t0=time.time()
     gdf=gpd.read_file(os.path.join(OUT_DIR,'tanks_50c_40iou.geojson'))
     gdf=prediction_to_bbox(gdf)
-    #input_image=Tile(os.path.join(DATA_DIR,'ORTO_ME_BCN_resolutions','20cm','2.tif'))
+    #input_image=Ortophoto(os.path.join(DATA_DIR,'ORTO_ME_BCN_resolutions','5cm','0.tif'))
+    input_image=Ortophoto(r'd:\VICTOR_PACHECO\CUARTO\PROCESADO_IMAGEN\data\ORTO_ME_BCN_pyramid\subset_2\tile_4096_grid_0_2.tif')
+    input_image2=Ortophoto(r'd:\VICTOR_PACHECO\CUARTO\PROCESADO_IMAGEN\data\ORTO_ME_BCN_pyramid\subset_3\tile_2048_grid_03_07.tif')
+    images=[input_image,input_image2]
+    count=0
+
+    for image in images:
+        sam.set_image(image.raster_path)
+        sam.predict(point_coords=[list(g.centroid.coords)[0] for g in gdf['geometry']], point_crs="EPSG:25831", output=os.path.join(folder_check(os.path.join(OUT_DIR,'sammed')),f"mask{count}.tif"), dtype="uint8")
+        count+=1
+
     #pyramid_dir=folder_check(os.path.join(DATA_DIR,os.path.basename(input_image.raster_path).split('.')[0])+'_pyramid')
 
     pyramid_dir=os.path.join(DATA_DIR,'ORTO_ME_BCN_pyramid')

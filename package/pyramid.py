@@ -9,16 +9,17 @@ sys.path.append(root_dir)
 
 from package.raster_utilities import Ortophoto
 from package.__init__ import *
-
+import shutil
 if __name__=="__main__":
     t0=time.time()
+    #shutil.rmtree(os.path.join(DATA_DIR,'ORTO_ME_BCN_pyramid'))
     complete_image=Ortophoto(os.path.join(DATA_DIR,'ORTO_ME_BCN.tif'))       
 
     # DEGRADE RESOLUTION
     #gdal.Warp(os.path.join(dirs[0],'out.tif'),os.path.join(DATA_DIR,'tiles_1024_safe','result_1024_grid_58_98.tif'),xRes=0.1,yRes=0.1)
     #gdal.Warp(os.path.join(dirs[0],'out.tif'),os.path.join(DATA_DIR,'tiles_1024_safe','result_1024_grid_0_0.tif'),xRes=0.1,yRes=0.1,resampleAlg='average')
     complete_image.create_pyramid(1024)
-    complete_image.create_resolutions(5)
+#    complete_image.create_resolutions(5)
 #    complete_image.create_non_parallelized_resolutions(5)
     t1=time.time()
     print(f'TIEMPO TRANSCURRIDO {t1-t0}')

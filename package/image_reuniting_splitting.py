@@ -20,7 +20,9 @@ from scipy.optimize import least_squares
 from package.vector_utilities import circle,VectorDataset
 from package.main import prediction_to_bbox
 from concurrent.futures import ProcessPoolExecutor
-from math import isnan,sin,cos,pi,asin
+from math import isnan,sin,cos,pi,asin,sqrt
+
+counter=0
 
 def regress_circle(polygon:shapely.Polygon,threshold=0.001):
     """Regresses approximately circular geometries into the least-squares best fit circle using Levenberg-Marquardt algorithm (MINIPACK)
@@ -35,13 +37,27 @@ def regress_circle(polygon:shapely.Polygon,threshold=0.001):
     
     pred_center=polygon.centroid
     np_exterior=np.array(polygon.boundary.coords)
+    if len(np_exterior)==4:
+        return polygon
+    
     x=np_exterior[:,0]
     y=np_exterior[:,1]
     
     f=least_squares(circle,x0=[pred_center.x,pred_center.y,10],args=(x,y),method='lm')
 
     a,b,r=float(f.x[0]),float(f.x[1]),float(f.x[2])
+    v=np.transpose(np.array([(x-np.full_like(x,a))**2+(y-np.full_like(x,b))**2-np.full_like(a,r**2)]))
+    std=sqrt(float(np.matmul(np.transpose(v),v))/(v.shape[0]-len(f.x)))
+    #/(v.shape[0]-len(f.x)))
+    #print(std, v.shape[0])
+    if std>.05:
+        global counter
+        counter+=1
+        #print(f'{counter,v.shape[0]}')
+        return polygon
+
     angles=np.linspace(0,2*pi,int(2*pi/asin(threshold/r)+1))
+    
     x=np.full_like(angles,a)+np.sin(angles)*np.full_like(angles,r)
     y=np.full_like(angles,b)+np.cos(angles)*np.full_like(angles,r)
     
@@ -75,14 +91,18 @@ if __name__=="__main__":
     
 
     t0=time.time()
+
     polygons=gpd.GeoSeries([regress_circle(polygon,0.01) for polygon in geometries.geometry])
 
     # partial_circle_regression=partial(regress_circle,threshold=0.01)
     rounded_p=gpd.GeoDataFrame(geometry=polygons,crs=diposits.crs)
 
-    rounded_p.to_file(os.path.join(BASE_DIR,'out','diposits_regressed.geojson'))
-
-    #rounded_p.to_parquet(os.path.join(BASE_DIR,'out','diposits_regressed.parquet'))
+    # t1=time.time()
+    # oriented_bboxes=prediction_to_bbox(rounded_p)
+    # t2=time.time()
+    # print(f'tiempo bbox{t2-t1}')   
+    #rounded_p.to_file(os.path.join(BASE_DIR,'out','diposits_regressed.geojson'))
+    rounded_p.to_parquet(os.path.join(BASE_DIR,'out','diposits_regressed.parquet'))
     t1=time.time()
     
     print(f'tiempo{t1-t0}') #138S to 3s-numpy optimization
