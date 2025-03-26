@@ -8,7 +8,7 @@ from math import sqrt,log,pi,sin,cos,asin
 import geopandas as gpd, pandas as pd
 from collections.abc import Iterable
 
-from package import BASE_DIR,DATA_DIR,PACKAGE_DIR,STATIC_DIR,driverDict
+from package import BASE_DIR,DATA_DIR,PACKAGE_DIR,STATIC_DIR,TEMP_DIR,driverDict
 
 #from fire import Fire
 
@@ -50,6 +50,10 @@ def bounds2wkt(bounds):
     poly_str = f"POLYGON(({X_min} {Y_min},{X_max} {Y_min},{X_max} {Y_max},{X_min} {Y_max},{X_min} {Y_min}))"
     return poly_str
 
+def bounds_gdf(bounds,crs):
+   return gpd.GeoDataFrame(geometry=gpd.GeoSeries.from_wkt([bounds2wkt(bounds)]),crs=crs)
+
+
 
 [folder_check(dir) for dir in  [DATA_DIR,BASE_DIR,PACKAGE_DIR,STATIC_DIR]]
 
@@ -75,8 +79,9 @@ class Ortophoto():
         self.pixel_width=self.raster.RasterXSize
         self.pixel_height=self.raster.RasterYSize
         self.crs=crs
-        self.wkt=self.get_wkt()
+        self.wkt=self._get_wkt()
         self.dstSRS_wkt=self.getSRS()
+        
 
     def __repr__(self):
         ''''
@@ -156,9 +161,12 @@ class Ortophoto():
         dstSRS_wkt = srs.ExportToWkt()
         return dstSRS_wkt
         
-    def get_wkt(self):
+    def _get_wkt(self):
         return f"POLYGON(({self.X_min} {self.Y_min},{self.X_max} {self.Y_min},{self.X_max} {self.Y_max},{self.X_min} {self.Y_max},{self.X_min} {self.Y_min}))"
 
+    def gdf(self):
+        return gpd.GeoDataFrame(geometry=gpd.GeoSeries.from_wkt([self.wkt]),crs=self.crs)
+    
     @staticmethod
     def nice_write(num):
         '''Devuelve los ceros necesarios para la función zfill que permiten ordenar los números'''
@@ -190,7 +198,6 @@ class Ortophoto():
     
     def polygonize(self,step,horizontal_skew=False,vertical_skew=False):
     
-        
         name_list=[]
         bound_list=[]
         # Generación de las ventanas para los recortes

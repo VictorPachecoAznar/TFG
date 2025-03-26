@@ -1,0 +1,35 @@
+Eines de interpolació del geoide EGM08D595 del ICC en el sistema ETRS89
+
+Eines: 
+4 executables : 
+	
+GEOehOHx.exe   : Calcula l'alçada ortomètrica a partir de la el·lipsoïdal emprant la ondulació determinada per la localització geogràfica.
+GEOOHehx.exe   : Calcula l'alçada el·lipsoïdal a partir de la ortomètrica emprant la ondulació determinada per la localització geogràfica.
+UTMehOHx.exe   : Calcula l'alçada ortomètrica a partir de la el·lipsoïdal emprant la ondulació determinada per la localització projectada.
+UTMOHehx.exe   : Calcula l'alçada el·lipsoïdal a partir de la ortomètrica emprant la ondulació determinada per la localització projectada.
+
+les tres primeres inicials indiquen el sistema de coordenades d'entrada 
+	GEO: Geogràfiques en format GMS
+	UTM: Projectives UTM FUS 31N
+
+le dues inicials següents indiquen l'alçada proporcionada. 
+	eh: Alçada el·lipsoïdal
+	OH: Alçada ortomètrica
+	
+Les dues inicials següents indiquen l'alçada que es calcularà junt amb la ondulació del geoide, empren la mateixa notació que l'anterior. 
+
+La darrera inicial fa menció a la versió . 
+
+Dades:
+
+cat80000.gr  : Model de geoide EGM08D595 del ICC . Correspon al model global EGM08 ajustat a la REDNAP a Catalunya. 
+
+diversos exemples de fitxers d'entrada
+
+Utilització : 
+
+1. prepareu un fitxer anomenat input.dat amb les dades a transformar seguint el formar dels exemples.
+2. Executeu l'eina adecuada per a la transformació que volgueu efectuar
+3. Obtindreu un fitxer de sortida amb el nom output... i infromació del sistema de coordenades i alçádes que conté.
+
+

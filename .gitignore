@@ -52,6 +52,9 @@ env/
 *.onnx
 *.geojson
 *.parquet
+*.doc
+*.pdf
+*.jpg
 
 update_yaml.txt
 

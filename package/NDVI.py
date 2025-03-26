@@ -9,7 +9,7 @@ sys.path.append(root_dir)
 
 from package.raster_utilities import *
 from package import *
-import cv2 as cv
+#import cv2 as cv
 import numpy as np
 
 def safe_divide(a,b):

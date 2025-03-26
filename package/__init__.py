@@ -11,8 +11,9 @@ PACKAGE_DIR=os.path.join(BASE_DIR,'package')
 STATIC_DIR=os.path.join(BASE_DIR,'static')
 SHELL_DIR=os.path.join(PACKAGE_DIR,'shell')
 OUT_DIR=os.path.join(BASE_DIR,'out')
+TEMP_DIR=os.path.join(BASE_DIR,'temp')
 
-driverDict={'tif':'GTiff','geojson':'GeoJSON'}
+driverDict={'.tif':'GTiff','.geojson':'GeoJSON'}
 modelDict={'buildings':{'SIZE':256,'PIXEL':40},
            'roads':{'SIZE':512,'PIXEL':20},
             'oil':{'SIZE':512,'SIZE':150}

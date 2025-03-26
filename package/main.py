@@ -12,6 +12,7 @@ from package.raster_utilities import Ortophoto,Tile,folder_check
 from concurrent.futures import ProcessPoolExecutor
 import time
 import pandas as pd
+folder_check(TEMP_DIR)
 
 def choose_model(name):
     #CREAR DATASET
@@ -23,11 +24,16 @@ def prediction_to_bbox(gdf):
     newgdf=gpd.GeoDataFrame(gdf,geometry=gpd.GeoSeries.from_wkt(wkts),crs=25831)
     return newgdf
 
+def read_file(path,DUCKDB=DUCKDB):
+    return DUCKDB.sql(f'''SELECT *
+            FROM ST_READ('{path}')''')
+    
 def duckdb_2_gdf(duck:duckdb.DuckDBPyRelation,geometry_column):
     temp='affected.csv'
     DUCKDB.sql(f'''COPY duck TO '{temp}' WITH (HEADER, DELIMITER ';')''')
     df=pd.read_csv(temp,sep=';')
     geodf=gpd.GeoDataFrame(df,geometry=gpd.GeoSeries.from_wkt(df[geometry_column]),crs=25831)
+    geodf=geodf.drop(columns=[geometry_column])
     os.remove(temp)
     return geodf
 
@@ -106,16 +112,19 @@ def filter_level(depth):
     fin_gdf.to_file(os.path.join(OUT_DIR,'TANKS_AFFECTED_MOSAICS.GEOJSON'))
     
 
-from samgeo import SamGeo
-sam = SamGeo(
-    model_type="vit_h",
-    automatic=False,
-    sam_kwargs=None,
-)
+
 
 if __name__=="__main__":
     #choose_model
     #model class has optimal resolution attribute
+    from samgeo import SamGeo
+    
+    sam = SamGeo(
+    model_type="vit_h",
+    automatic=False,
+    sam_kwargs=None,
+    )
+    
     t0=time.time()
     gdf=gpd.read_file(os.path.join(OUT_DIR,'tanks_50c_40iou.geojson'))
     gdf=prediction_to_bbox(gdf)
@@ -135,13 +144,8 @@ if __name__=="__main__":
     pyramid_dir=os.path.join(DATA_DIR,'ORTO_ME_BCN_pyramid')
     depth=2
     
-    def read_file(path,DUCKDB=DUCKDB):
-        return DUCKDB.sql(f'''SELECT *
-                FROM ST_READ('{path}')''')
-        
-        
-        
 
+        
     t1=time.time()
     print(f'{t1-t0}')
     pass    
