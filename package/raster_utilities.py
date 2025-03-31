@@ -9,7 +9,7 @@ import geopandas as gpd, pandas as pd
 from collections.abc import Iterable
 
 from package import BASE_DIR,DATA_DIR,PACKAGE_DIR,STATIC_DIR,TEMP_DIR,driverDict
-
+import numpy as np
 #from fire import Fire
 
 
@@ -34,13 +34,20 @@ def _warp_single_raster_shell(name,bounds,raster):
     command=f'gdalwarp -q -multi -wm 5000 -te  {bounds[0]} {bounds[1]} {bounds[2]} {bounds[3]} "{raster.raster_path}" "{name}"'
     subprocess.Popen(command,shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-def _generalize_single_raster(name,bounds,raster,xRes,yRes):
-    options= gdal.WarpOptions(dstSRS=raster.dstSRS_wkt,dstNodata=0,outputBounds=bounds,outputBoundsSRS=raster.dstSRS_wkt,multithread=True,xRes=xRes,yRes=yRes,resampleAlg='bilinear')
     gdal.Warp(name,raster.raster,options=options)
 
 def _simplify_single_raster(name,xRes,yRes,bounds,raster):
     options= gdal.WarpOptions(dstSRS=raster.dstSRS_wkt,dstNodata=0,outputBounds=bounds,outputBoundsSRS=raster.dstSRS_wkt,multithread=True,xRes=xRes,yRes=yRes,resampleAlg='bilinear')
     gdal.Warp(name,raster.raster,options=options)
+
+def _generalize_single_raster(name,bounds,xRes,yRes,raster):
+    options= gdal.WarpOptions(dstSRS=raster.dstSRS_wkt,dstNodata=0,outputBounds=bounds,outputBoundsSRS=raster.dstSRS_wkt,multithread=True,xRes=xRes,yRes=yRes,resampleAlg='bilinear')
+    gdal.Warp(name,raster.raster,options=options)
+
+def _native_parallelized_simplifly_single_raster(name,xRes,yRes,bounds,raster):
+    options= gdal.WarpOptions(dstSRS=raster.dstSRS_wkt,dstNodata=0,outputBounds=bounds,outputBoundsSRS=raster.dstSRS_wkt,multithread=True,warpOptions='NUM_THREADS=ALL_CPUS',xRes=xRes,yRes=yRes,resampleAlg='bilinear')
+    gdal.Warp(name,raster.raster,options=options)
+
 
 def closest_base_power(x,power=2):
     return power**int(log(x,power))    
@@ -60,15 +67,16 @@ def bounds_gdf(bounds,crs):
 
 class Ortophoto():
 
-    def __init__(self,path=None,crs=25831):
+    def __init__(self,path=None,folder=None,crs=25831):
         try:
             if os.path.exists(path):
                 self.raster=gdal.Open(path)
         except:
-            exit
+            raise Exception('Name does not exist')
             
         self.raster_path=path
         self.basename=os.path.basename(path)
+        self.folder=self._get_dirname(folder)
         self.GT=[self.X_min, self.X_pixel, self.X_spin, self.Y_max, self.Y_spin, self.Y_pixel]=self.raster.GetGeoTransform()
         self.X_max = self.X_min + self.X_pixel * self.raster.RasterXSize
         self.Y_min = self.Y_max + self.Y_pixel * self.raster.RasterYSize
@@ -89,6 +97,20 @@ class Ortophoto():
         '''
         return self.raster_path
 
+    def _get_dirname(self,folder):
+        """Auxiliary function to find the folder for the Ortophoto
+
+        Args:
+            folder (str): Path to a different folder
+
+        Returns:
+            str: Bar
+        """
+        if folder is not None:
+            return folder_check(folder)
+        else:
+            return os.path.dirname(self.raster_path)
+         
     # PICKLE FOR SERIALIZATION get and set state functions. 
     # These work by using a dict
 
@@ -202,7 +224,7 @@ class Ortophoto():
         bound_list=[]
         # Generación de las ventanas para los recortes
 
-        tiles_dir=folder_check(os.path.join(DATA_DIR,f'tiles_{os.path.basename(self.raster_path).split(".")[0]}_{step}'))
+        tiles_dir=folder_check(os.path.join(self.folder,f'tiles_{os.path.basename(self.raster_path).split(".")[0]}_{step}'))
 
 
         name_list,bound_list=self.tesselation(tiles_dir,step)
@@ -239,7 +261,7 @@ class Ortophoto():
         m.save(os.path.join(STATIC_DIR,f'{tile_size}.html'))
 
     def create_resolutions(self,depth):
-        resolutions_dir=folder_check(os.path.join(DATA_DIR,os.path.basename(self.raster_path).split('.')[0])+'_resolutions')
+        resolutions_dir=folder_check(os.path.join(self.folder,os.path.basename(self.raster_path).split('.')[0])+'_resolutions')
         gen=partial(_simplify_single_raster,raster=self,bounds=self.bounds)
         args={i:{'Name':os.path.join(folder_check(os.path.join(resolutions_dir,str(int(100*self.X_pixel*2**i))+'cm')),f'{i}.tif'),'xRes':self.X_pixel*2**i,'yRes':self.Y_pixel*2**i} for i in range(depth)}
         df=pd.DataFrame(args)
@@ -248,17 +270,23 @@ class Ortophoto():
                 results=list(executor.map(gen,df['Name'],df['xRes'],df['yRes']))
 
     def create_non_parallelized_resolutions(self,depth):
-        resolutions_dir=folder_check(os.path.join(DATA_DIR,os.path.basename(self.raster_path).split('.')[0])+'_resolutions')
+        resolutions_dir=folder_check(os.path.join(self.folder,os.path.basename(self.raster_path).split('.')[0])+'_resolutions')
         args={i:{'Name':os.path.join(folder_check(os.path.join(resolutions_dir,str(int(100*self.X_pixel*2**i))+'cm')),f'{i}.tif'),'xRes':self.X_pixel*2**i,'yRes':self.Y_pixel*2**i} for i in range(depth)}
         df=pd.DataFrame(args)
         df=df.transpose()
         for i in range(len(df)):
             _simplify_single_raster(name=df['Name'][i],xRes=df['xRes'][i],yRes=df['yRes'][i],bounds=self.bounds,raster=self)
 
+    def create_gdal_parallelized_resolutions(self,depth):
+        resolutions_dir=folder_check(os.path.join(self.folder,os.path.basename(self.raster_path).split('.')[0])+'_resolutions')
+        args={i:{'Name':os.path.join(folder_check(os.path.join(resolutions_dir,str(int(100*self.X_pixel*2**i))+'cm')),f'{i}.tif'),'xRes':self.X_pixel*2**i,'yRes':self.Y_pixel*2**i} for i in range(depth)}
+        df=pd.DataFrame(args)
+        df=df.transpose()
+        for i in range(len(df)):
+            _native_parallelized_simplifly_single_raster(name=df['Name'][i],xRes=df['xRes'][i],yRes=df['yRes'][i],bounds=self.bounds,raster=self)
 
     def create_pyramid(self,lowest_pixel_size):
         
-        t0=time()
         largest_side=max(self.pixel_width,self.pixel_height)
         smallest_side=min(self.pixel_width,self.pixel_height)    
 
@@ -269,46 +297,63 @@ class Ortophoto():
         largest_tile=closest_base_power(smallest_side)
         depth=int(log(largest_tile,2))-int(log(lowest_pixel_size,2))
 
-        t1=time()
         if depth<=0:
             print('LA TESELA PEDIDA NO ES DE UN TAMAÑO SUFICIENTE')
 
-        pyramid_dir=folder_check(os.path.join(DATA_DIR,os.path.basename(self.raster_path).split('.')[0])+'_pyramid')
-        dirs=[folder_check(os.path.join(pyramid_dir,f'subset_{str(i).zfill(self.nice_write(depth))}')) for i in range(depth+1)]
-        image_loaded_generalization=partial(_generalize_single_raster,raster=self)             
+        pyramid_dir=folder_check(os.path.join(self.folder,os.path.basename(self.raster_path).split('.')[0])+'_pyramid')
+        pyramid_raster_dir=folder_check(os.path.join(pyramid_dir,'raster'))
+        pyramid_vector_dir=folder_check(os.path.join(pyramid_dir,'vector'))  
 
-        t2=time()
-        print(f'''
-            PREPROCESSING {t1-t0}
-            CALCULATE PARAMETERS{t2-t1}''')
-        for layer in range(depth,-1,-1):
-            divisor=int(2**layer)
-            tile_size=largest_tile/divisor
-            mult=2**(depth-layer)
-            xRes,yRes=self.X_pixel*mult,self.Y_pixel*mult
+        dirs=[folder_check(os.path.join(pyramid_raster_dir,f'subset_{str(i).zfill(self.nice_write(depth))}')) for i in range(depth+1)]
+        image_loaded_generalization=partial(_simplify_single_raster,raster=self)   
+        #image_loaded_generalization=partial(_generalize_single_raster,raster=self) 
+  
+        layers=[layer for layer in range(depth,-1,-1)]
+        divisors=[int(2**layer) for layer in layers]
+        directories=[dirs[layer] for layer in  layers]
+        tile_sizes=[largest_tile/divisor for divisor in divisors]
+        teselas=list(map(self.tesselation,directories,tile_sizes))
+        m=[t[0] for t in teselas]
+        blueprint=[np.array(a) for a in m]
+        
+        xRes=[self.X_pixel*2**(depth-layer) for layer in layers]
+        yRes=[self.Y_pixel*2**(depth-layer) for layer in layers]
+        
+        xRes=[np.full_like(sample,x).astype(np.float64).tolist() for (sample,x) in zip(blueprint,xRes)]
+        yRes=[np.full_like(sample,y).astype(np.float64).tolist() for (sample,y) in zip(blueprint,yRes)]
+        xRes_flattened=[i for inte in xRes for i in inte]
+        yRes_flattened=[i for inte in yRes for i in inte]
+        
+        name_lists=[t[0] for t in teselas]
+        bound_lists=[t[1] for t in teselas]
+        
+        bound_gdfs=[gpd.GeoDataFrame({'NAME':name_list},geometry=gpd.GeoSeries.from_wkt([bounds2wkt(bound) for bound in bound_list]),crs=25831) for (name_list,bound_list) in zip(name_lists,bound_lists)]
+        [bound_gdf.to_file(os.path.join(pyramid_vector_dir,f'subset_{layer}.geojson')) for (bound_gdf,layer) in zip(bound_gdfs,layers)]
+        name_lists_flattened=[t for tesela in teselas for t in tesela[0]]
+        bounds_lists_flattened=[t for tesela in teselas for t in tesela[1]]
 
-            directory=dirs[layer]
-            t3=time()
-            print(f'preteselation{t3-t2}')
-            name_list,bound_list=self.tesselation(directory,tile_size)
-            bound_gdf=gpd.GeoDataFrame({'NAME':name_list},geometry=gpd.GeoSeries.from_wkt([bounds2wkt(bound) for bound in bound_list]),crs=25831)
-            bound_gdf.to_file(os.path.join(pyramid_dir,f'subset_{layer}.geojson'))
-            self.explore(bound_list,tile_size)
-            generalize=partial(image_loaded_generalization,xRes=xRes,yRes=yRes)
+        with ProcessPoolExecutor() as executor:
+                results=list(executor.map(image_loaded_generalization,name_lists_flattened,xRes_flattened,yRes_flattened,bounds_lists_flattened))
+        t1=time()
+        # # print(f'i actually did it in {t1-t0}s')
+        # for layer in range(depth,-1,-1):
+        #     divisor=int(2**layer)
+        #     tile_size=largest_tile/divisor
 
-            with ProcessPoolExecutor() as executor:
-                results=list(executor.map(generalize,name_list,bound_list))
-        t3=time()
-        print(f'''
-            PREPROCESSING {t1-t0}
-            CALCULATE PARAMETERS{t2-t1}
-            FOR LOOP {t3-t2}''')
-        # image_ndarray=self.raster.ReadAsArray()
-        # for channel in range(image_ndarray.shape[0]):
-        #     print(image_ndarray[channel].shape)
+        #     directory=dirs[layer]
+        #     name_list,bound_list=self.tesselation(directory,tile_size)
             
-        # print(folder_check(pyramid_dir))
-        pass
+        #     mult=2**(depth-layer)
+        #     xRes,yRes=self.X_pixel*mult,self.Y_pixel*mult
+        #     bound_gdf=gpd.GeoDataFrame({'NAME':name_list},geometry=gpd.GeoSeries.from_wkt([bounds2wkt(bound) for bound in bound_list]),crs=25831)
+        #     bound_gdf.to_file(os.path.join(pyramid_vector_dir,f'subset_{layer}.geojson'))
+        #     #self.explore(bound_list,tile_size)
+        #     generalize=partial(image_loaded_generalization,xRes=xRes,yRes=yRes)
+
+        #     with ProcessPoolExecutor() as executor:
+        #         results=list(executor.map(generalize,name_list,bound_list))
+
+        return None
 
     def cloneBand(self,image,dst_filename,driver_name = None):
         """Creates a new raster file just like the current, given a matrix 
@@ -359,11 +404,11 @@ class Tile(Ortophoto):
         Args:   path (str): Complete path to the tile as a string
                 crs (int=25831): CRS of the tile to be loaded
         '''
-        super().__init__(path,crs)
+        super().__init__(path,None,crs)
         self.original_size,self.row,self.col=self.get_row_col()
-        self.pyramid_layer=int(os.path.basename(os.path.dirname(self.raster_path)).split('_')[1])
+        self.pyramid_layer=int(os.path.basename(self.folder).split('_')[1])
         self.pyramid=os.path.dirname(os.path.dirname(self.raster_path))
-        self.pyramid_depth=len(os.listdir(self.pyramid))
+        self.pyramid_depth=len([i  for i in os.listdir(self.pyramid) if os.path.isfile(os.path.join(self.pyramid,i))==False])
         #self.children=self.get_children()
 
     def __eq__(self,t2: Ortophoto):

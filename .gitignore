@@ -55,6 +55,7 @@ env/
 *.doc
 *.pdf
 *.jpg
+*.vrt
 
 update_yaml.txt
 

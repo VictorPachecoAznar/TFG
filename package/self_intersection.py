@@ -69,7 +69,7 @@ def self_intersection(file):
     rectangularity=np.array([i.sum()/(i[0]*4) for i in distances])
 
     clean['rectangularity']=rectangularity
-    
+    print(clean)
     # rectangularity=DUCKDB.sql(
     # f''' SELECT 
     #     geom AS bbox,
@@ -81,6 +81,6 @@ def self_intersection(file):
     
     # os.remove(temp_oriented)
 
-self_intersection_stats=self_intersection(os.path.join(OUT_DIR,'tanks_50c_40iou.geojson'))
-
+#self_intersection_stats=self_intersection(os.path.join(OUT_DIR,'tanks_50c_40iou.geojson'))
+self_intersection(os.path.join(OUT_DIR,'QGIS_BOXES','ORIENTED_BOXES.GEOJSON'))
 
