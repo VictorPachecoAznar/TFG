@@ -39,7 +39,7 @@ def duckdb_2_gdf(duck:duckdb.DuckDBPyRelation,geometry_column):
 
 def filter_level(detections,pyramid_dir,depth,geometry_column):
     
-    tiles=read_file(os.path.join(pyramid_dir,f"subset_{depth}.geojson"))
+    tiles=read_file(os.path.join(pyramid_dir,'vector',f"subset_{depth}.geojson"))
     detections=detections.select('*')
     #CONNECT PREDICTION TO TILE
     intersection=DUCKDB.sql(
@@ -93,8 +93,8 @@ def filter_level(detections,pyramid_dir,depth,geometry_column):
     
     relation_gdf=duckdb_2_gdf(combi,'geom')
     
-    fun=lambda x:[i+'.tif' for i in x]
-    array=[fun(i) for i in cleans_indexed['unique_tiles'].fetchnumpy()['unique_tiles']]
+    #fun=lambda x:[i for i in x]
+    array=[i for i in cleans_indexed['unique_tiles'].fetchnumpy()['unique_tiles']]
     names=[os.path.join(f'virtuals_{depth}',str(i)) for i in range(1,len(cleans_indexed)+1)]
     
     with ProcessPoolExecutor(5) as Executor:
@@ -134,22 +134,22 @@ def create_files_from_sql(tab,column,tile_names,file_names,crs=25831):
 if __name__=="__main__":
     #choose_model
     #model class has optimal resolution attribute
-    # from samgeo import SamGeo
+    from samgeo import SamGeo
     
-    # sam = SamGeo(
-    # model_type="vit_h",
-    # automatic=False,
-    # sam_kwargs=None,
-    # )
+    sam = SamGeo(
+     model_type="vit_h",
+     automatic=False,
+     sam_kwargs=None,
+     )
     
     t0=time.time()
     #gdf=gpd.read_file(os.path.join(OUT_DIR,'tanks_50c_40iou.geojson'))
     #gdf=prediction_to_bbox(gdf)
-    input_image=Tile(os.path.join(DATA_DIR,'ORTO_ZAL_BCN_pyramid','subset_2','tile_4096_grid_0_2.tif'))
+    input_image=Tile(os.path.join(DATA_DIR,'ORTO_ZAL_BCN','ORTO_ZAL_BCN_pyramid','raster','subset_2','tile_4096_grid_0_2.tif'))
     
     for depth in range(input_image.pyramid_depth):
         detections=read_file(os.path.join(OUT_DIR,'QGIS_BUILDINGS','ORIENTED_BOXES.GEOJSON'))
-        pyramid_dir=os.path.join(DATA_DIR,'ORTO_ZAL_BCN_pyramid')
+        pyramid_dir=input_image.pyramid
         exiters,final=filter_level(detections,pyramid_dir,depth,'geom')
         
         # ex=DUCKDB.sql(f'''SELECT DISTINCT NAME AS unique_names
@@ -188,20 +188,32 @@ if __name__=="__main__":
     #     ''')
     
     #input_image=Ortophoto(os.path.join(DATA_DIR,'ORTO_ME_BCN_resolutions','5cm','0.tif'))
-    input_image=Tile(os.path.join(DATA_DIR,'ORTO_ME_BCN_pyramid','subset_2','tile_4096_grid_0_2.tif'))
+    #input_image=Tile(os.path.join(DATA_DIR,'ORTO_ME_BCN_pyramid','subset_2','tile_4096_grid_0_2.tif'))
     input_image2=Ortophoto(r'd:\VICTOR_PACHECO\CUARTO\PROCESADO_IMAGEN\data\ORTO_ME_BCN_pyramid\subset_3\tile_2048_grid_03_07.tif')
-    images=[input_image,input_image2]
+    #images=[input_image,input_image2]
     count=0
 
-    for image in images:
-        sam.set_image(image.raster_path)
-        sam.predict(point_coords=[list(g.centroid.coords)[0] for g in gdf['geometry']], point_crs="EPSG:4326", output=os.path.join(folder_check(os.path.join(OUT_DIR,'sammed')),f"mask{count}.tif"), dtype="uint8")
-        count+=1
+    #geojson=os.path.join(OUT_DIR,)
+    #sam.predict(boxes=geojson, point_crs="EPSG:4326", output="mask9.tif", dtype="uint8")
+
+    # for image in images:
+    #     sam.set_image(image.raster_path)
+    #     sam.predict(boxes=geojson, point_crs="EPSG:4326", output=os.path.join(folder_check(os.path.join(OUT_DIR,'sammed')),f"mask{count}.tif"), dtype="uint8")
+    #     count+=1
+    
+    out_name=os.path.join(folder_check(os.path.join(OUT_DIR,'sammed')),f"mask{count}.tif")
+    
+    def predict_tile(image_path,geojson,out_name):
+        sam.set_image(image_path)
+        sam.predict(boxes=geojson, point_crs="EPSG:4326", output=out_name, dtype="uint8")
+    
+    #predict_tile(input_image2.raster_path,)
+
 
     #pyramid_dir=folder_check(os.path.join(DATA_DIR,os.path.basename(input_image.raster_path).split('.')[0])+'_pyramid')
 
-    pyramid_dir=os.path.join(DATA_DIR,'ORTO_ME_BCN_pyramid')
-    depth=2
+    #pyramid_dir=os.path.join(DATA_DIR,'ORTO_ME_BCN_pyramid')
+    #depth=2
     
 
         

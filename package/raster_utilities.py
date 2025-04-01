@@ -60,8 +60,6 @@ def bounds2wkt(bounds):
 def bounds_gdf(bounds,crs):
    return gpd.GeoDataFrame(geometry=gpd.GeoSeries.from_wkt([bounds2wkt(bounds)]),crs=crs)
 
-
-
 [folder_check(dir) for dir in  [DATA_DIR,BASE_DIR,PACKAGE_DIR,STATIC_DIR]]
 
 
@@ -407,7 +405,7 @@ class Tile(Ortophoto):
         super().__init__(path,None,crs)
         self.original_size,self.row,self.col=self.get_row_col()
         self.pyramid_layer=int(os.path.basename(self.folder).split('_')[1])
-        self.pyramid=os.path.dirname(os.path.dirname(self.raster_path))
+        self.pyramid=os.path.dirname(os.path.dirname(os.path.dirname(self.raster_path)))
         self.pyramid_depth=len([i  for i in os.listdir(self.pyramid) if os.path.isfile(os.path.join(self.pyramid,i))==False])
         #self.children=self.get_children()
 
