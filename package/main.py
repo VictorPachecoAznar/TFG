@@ -133,13 +133,13 @@ def create_files_from_sql(tab,column,tile_names,file_names,crs=25831):
 if __name__=="__main__":
     #choose_model
     #model class has optimal resolution attribute
-    # from samgeo import SamGeo
+    from samgeo import SamGeo
     
-    # sam = SamGeo(
-    #  model_type="vit_h",
-    #  automatic=False,
-    #  sam_kwargs=None,
-    #  )
+    sam = SamGeo(
+      model_type="vit_h",
+      automatic=False,
+      sam_kwargs=None,
+      )
     
     t0=time.time()
     #gdf=gpd.read_file(os.path.join(OUT_DIR,'tanks_50c_40iou.geojson'))
@@ -148,25 +148,14 @@ if __name__=="__main__":
     results_dir=folder_check(os.path.join(OUT_DIR,'intersection_results'))
     
     for depth in range(input_image.pyramid_depth):
+        
         detections=read_file(os.path.join(OUT_DIR,'QGIS_BUILDINGS','ORIENTED_BOXES.GEOJSON'))
         pyramid_dir=input_image.pyramid
         exiters,final=filter_level(detections,pyramid_dir,depth,'geom')
-        
-        # ex=DUCKDB.sql(f'''SELECT DISTINCT NAME AS unique_names
-        #                   FROM exiters''')
-        
-        # exiters_indexed=DUCKDB.sql(f'''SELECT *,ROW_NUMBER() OVER (ORDER BY unique_names) AS row_index
-        #                   FROM ex
-        #  ''')
-    
-
-    
 
         level_dir=folder_check(os.path.join(results_dir,str(depth)))
         contained_dir=folder_check(os.path.join(level_dir,'contained'))
         limit_dir=folder_check(os.path.join(level_dir,'limit'))
-        final_gdf=duckdb_2_gdf(final,'geom')
-        final_gdf.to_file(os.path.join(limit_dir,'limit.geojson'))
         
         def create_geojson_mass(table,name_field,output_directory,crs=25831,geometry_column='geom'):
             table_relation=table.select('*')
@@ -207,7 +196,7 @@ if __name__=="__main__":
     
     #input_image=Ortophoto(os.path.join(DATA_DIR,'ORTO_ME_BCN_resolutions','5cm','0.tif'))
     #input_image=Tile(os.path.join(DATA_DIR,'ORTO_ME_BCN_pyramid','subset_2','tile_4096_grid_0_2.tif'))
-    input_image2=Ortophoto(r'd:\VICTOR_PACHECO\CUARTO\PROCESADO_IMAGEN\data\ORTO_ME_BCN_pyramid\subset_3\tile_2048_grid_03_07.tif')
+    #input_image2=Ortophoto(r'd:\VICTOR_PACHECO\CUARTO\PROCESADO_IMAGEN\data\ORTO_ME_BCN_pyramid\subset_3\tile_2048_grid_03_07.tif')
     #images=[input_image,input_image2]
     count=0
 

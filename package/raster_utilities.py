@@ -8,7 +8,7 @@ from math import sqrt,log,pi,sin,cos,asin
 import geopandas as gpd, pandas as pd
 from collections.abc import Iterable
 
-from package import BASE_DIR,DATA_DIR,PACKAGE_DIR,STATIC_DIR,TEMP_DIR,driverDict
+from package import *
 import numpy as np
 #from fire import Fire
 
@@ -406,7 +406,8 @@ class Tile(Ortophoto):
         self.original_size,self.row,self.col=self.get_row_col()
         self.pyramid_layer=int(os.path.basename(self.folder).split('_')[1])
         self.pyramid=os.path.dirname(os.path.dirname(os.path.dirname(self.raster_path)))
-        self.pyramid_depth=len([i  for i in os.listdir(self.pyramid) if os.path.isfile(os.path.join(self.pyramid,i))==False])
+        self.raster_pyramid=os.path.join(self.pyramid,'raster')
+        self.pyramid_depth=len([i  for i in os.listdir(self.raster_pyramid) if os.path.isfile(os.path.join(self.raster_pyramid,i))==False])
         #self.children=self.get_children()
 
     def __eq__(self,t2: Ortophoto):
@@ -464,7 +465,7 @@ class Tile(Ortophoto):
             int: number of rows at the current level
             int: number of columns at the current level
         """
-        curdir=os.path.join(self.pyramid,f'subset_{self.pyramid_layer}')
+        curdir=os.path.join(self.raster_pyramid,f'subset_{self.pyramid_layer}')
         current_siblings=os.listdir(curdir)
         init_size,n_row,n_col=self.get_row_col(os.path.join(curdir,current_siblings[-1]))
         return n_row,n_col
@@ -490,7 +491,7 @@ class Tile(Ortophoto):
                 for m in range(i_min,i_max+1):
                     current.append((str(m).zfill(self.nice_write((n_row+1)*2**k)),str(l).zfill(self.nice_write((n_col+1)*2**k))))
             
-            out_list.append([os.path.join(self.pyramid,f'subset_{base+k}',f'tile_{int(self.original_size/(2**k))}_grid_{i}_{j}.tif') for i,j in current])
+            out_list.append([os.path.join(self.raster_pyramid,f'subset_{base+k}',f'tile_{int(self.original_size/(2**k))}_grid_{i}_{j}.tif') for i,j in current])
         self.children=out_list
         #self.smallest_children=out_list[-1]
         return out_list
@@ -511,7 +512,7 @@ class Tile(Ortophoto):
             j=int(self.col/2**k)
             current=[]
             current.append((str(i).zfill(self.nice_write((n_row+1)/2**k)),str(j).zfill(self.nice_write((n_col+1)/2**k))))
-            out_list.append([os.path.join(self.pyramid,f'subset_{base-k}',f'tile_{int(self.original_size*(2**k))}_grid_{i}_{j}.tif') for i,j in current])
+            out_list.append([os.path.join(self.raster_pyramid,f'subset_{base-k}',f'tile_{int(self.original_size*(2**k))}_grid_{i}_{j}.tif') for i,j in current])
         self.parents=out_list
         #self.biggest_parent=out_list[-1]
         return out_list
@@ -531,7 +532,7 @@ class Tile(Ortophoto):
         j_max=j_min+1
         sibling_list=[(i_min,j_min),(i_max,j_min),(i_min,j_max),(i_max,j_max)]
         n_row,n_col=self.get_n_rows_cols()
-        candidates=[os.path.join(self.pyramid,f'subset_{base}',f'tile_{size}_grid_{str(i).zfill(self.nice_write(n_row+1))}_{str(j).zfill(self.nice_write(n_col+1))}.tif') for i,j in sibling_list]
+        candidates=[os.path.join(self.raster_pyramid,f'subset_{base}',f'tile_{size}_grid_{str(i).zfill(self.nice_write(n_row+1))}_{str(j).zfill(self.nice_write(n_col+1))}.tif') for i,j in sibling_list]
         
         self.siblings= [c for c in candidates if os.path.exists(c)]
         return self.siblings
