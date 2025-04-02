@@ -102,7 +102,7 @@ def filter_level(detections,pyramid_dir,depth,geometry_column):
     
     mosaic_index=[int(os.path.splitext(os.path.basename(i))[0]) for i in mosaics]
     
-    mosaics_data=[{'MOSAIC':i,'INDEX':j}for (i,j) in zip(mosaics,mosaic_index)]
+    mosaics_data=[{'MOSAIC':i,'INDEX':j} for (i,j) in zip(mosaics,mosaic_index)]
     mosaics_df=pd.DataFrame(mosaics_data)
     
     final=DUCKDB.sql(f'''
@@ -113,9 +113,8 @@ def filter_level(detections,pyramid_dir,depth,geometry_column):
                         on a.affected_tiles=u.unique_tiles) c
             ON m.INDEX=c.row_index''')
     
-    fin_gdf=duckdb_2_gdf(final,'geom')
+
     return exiters, final
-    fin_gdf.to_file(os.path.join(OUT_DIR,'TANKS_AFFECTED_MOSAICS.GEOJSON'))
     
 
 def create_file_from_sql(table,column,name,file_name,crs):
@@ -134,18 +133,19 @@ def create_files_from_sql(tab,column,tile_names,file_names,crs=25831):
 if __name__=="__main__":
     #choose_model
     #model class has optimal resolution attribute
-    from samgeo import SamGeo
+    # from samgeo import SamGeo
     
-    sam = SamGeo(
-     model_type="vit_h",
-     automatic=False,
-     sam_kwargs=None,
-     )
+    # sam = SamGeo(
+    #  model_type="vit_h",
+    #  automatic=False,
+    #  sam_kwargs=None,
+    #  )
     
     t0=time.time()
     #gdf=gpd.read_file(os.path.join(OUT_DIR,'tanks_50c_40iou.geojson'))
     #gdf=prediction_to_bbox(gdf)
     input_image=Tile(os.path.join(DATA_DIR,'ORTO_ZAL_BCN','ORTO_ZAL_BCN_pyramid','raster','subset_2','tile_4096_grid_0_2.tif'))
+    results_dir=folder_check(os.path.join(OUT_DIR,'intersection_results'))
     
     for depth in range(input_image.pyramid_depth):
         detections=read_file(os.path.join(OUT_DIR,'QGIS_BUILDINGS','ORIENTED_BOXES.GEOJSON'))
@@ -159,17 +159,35 @@ if __name__=="__main__":
         #                   FROM ex
         #  ''')
     
-        out=DUCKDB.sql(
-        '''SELECT NAME,ST_COLLECT(LIST(geom)) geom
-        FROM exiters 
-        GROUP BY NAME
-            ''')
+
     
-        tile_names=list(out.fetchnumpy()['NAME'])
-        vector_dir=folder_check(os.path.join(OUT_DIR,str(depth)))
-        tile_ids=[os.path.basename(t) for t in tile_names]
-        file_names=[os.path.join(vector_dir,os.path.basename(t)) for t in tile_names]
-        create_files_from_sql(out,'NAME',tile_names,file_names)
+
+        level_dir=folder_check(os.path.join(results_dir,str(depth)))
+        contained_dir=folder_check(os.path.join(level_dir,'contained'))
+        limit_dir=folder_check(os.path.join(level_dir,'limit'))
+        final_gdf=duckdb_2_gdf(final,'geom')
+        final_gdf.to_file(os.path.join(limit_dir,'limit.geojson'))
+        
+        def create_geojson_mass(table,name_field,output_directory,crs=25831,geometry_column='geom'):
+            table_relation=table.select('*')
+            select=DUCKDB.sql(f'''SELECT {name_field},ST_COLLECT(LIST({geometry_column})) geom
+                FROM table_relation
+                GROUP BY {name_field}
+            ''')
+            tile_names=list(select.fetchnumpy()[name_field])
+            file_names=[os.path.join(output_directory,os.path.splitext(os.path.basename(t))[0]) for t in tile_names]
+            create_files_from_sql(select,name_field,tile_names,file_names,crs)
+        
+        create_geojson_mass(exiters,'NAME',contained_dir)
+        create_geojson_mass(final,'MOSAIC',limit_dir)
+        
+        # tile_names=list(out.fetchnumpy()['NAME'])
+        
+        # tile_ids=[os.path.basename(t) for t in tile_names]
+        # file_names=[os.path.join(contained_dir,os.path.basename(t)) for t in tile_names]
+        
+        # create_files_from_sql(out,'NAME',tile_names,file_names)
+        # create_file_from_sql(final,'MOSAIC')
     
 
             
