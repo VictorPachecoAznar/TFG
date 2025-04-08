@@ -120,7 +120,7 @@ class Ortophoto():
     def __setstate__(self,state):
          self.__dict__.update(state)
          self.raster = gdal.Open(self.raster_path)
-
+    
     @staticmethod
     def mosaic_rasters(im_input:Iterable,name:str,fetch=False):
         '''
@@ -364,7 +364,7 @@ class Ortophoto():
         
         if driver_name is None:
             extension=os.path.splitext(dst_filename)[1]
-            driver_name=driverDict.get(extension,driverDict['tif'])
+            driver_name=driverDict.get(extension,driverDict['.tif'])
         driver = gdal.GetDriverByName(driver_name)
         ndvi_ds= driver.Create(dst_filename, xsize=image.shape[1], ysize=image.shape[0],
                     bands=1, eType=gdal.GDT_Byte)
