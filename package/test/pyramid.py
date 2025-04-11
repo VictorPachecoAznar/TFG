@@ -1,14 +1,8 @@
 import os,sys
 import time
 
-# Get the root directory
-root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-
-# Add the root directory to sys.path
-sys.path.append(root_dir)
-
 from package.raster_utilities import Ortophoto
-from package.__init__ import *
+from package import *
 import shutil
 import matplotlib.pyplot as plt
 if __name__=="__main__":

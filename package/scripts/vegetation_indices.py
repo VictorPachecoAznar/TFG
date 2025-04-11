@@ -7,7 +7,7 @@ sys.path.append(root_dir)
 
 from package import *
 from raster_utilities import Ortophoto
-from NDVI import safe_divide
+from package.scripts.NDVI import safe_divide
 import numpy as np
 
 import cv2 as cv

@@ -1,70 +1,12 @@
-import os,sys
-
-# Get the root directory
-root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-
-# Add the root directory to sys.path
-sys.path.append(root_dir)
-
 from package.raster_utilities import Ortophoto
-from package.__init__ import *
+from package import *
+from package.vector_utilities import regress_circle
 
 #shapely.Polygon.interpolate
 #import scipy.interpolate
 import numpy as np, pandas as pd
 import geopandas as gpd, shapely
 import time
-
-from functools import partial
-from scipy.optimize import least_squares
-from package.vector_utilities import circle,VectorDataset
-from package.main import prediction_to_bbox
-from concurrent.futures import ProcessPoolExecutor
-from math import isnan,sin,cos,pi,asin,sqrt
-
-counter=0
-
-def regress_circle(polygon:shapely.Polygon,threshold=0.001):
-    """Regresses approximately circular geometries into the least-squares best fit circle using Levenberg-Marquardt algorithm (MINIPACK)
-
-    Args:
-        polygon (shapely.Polygon): Polygon to be regressed
-        threshold (float, optional): _description_. Defaults to 0.001.
-
-    Returns:
-        shapely.Polygon: Polygon with an edge length equal to the threshold and a circular shape based on the least squares-regressed equation.
-    """
-    
-    pred_center=polygon.centroid
-    np_exterior=np.array(polygon.boundary.coords)
-    if len(np_exterior)==4:
-        return polygon
-    
-    x=np_exterior[:,0]
-    y=np_exterior[:,1]
-    
-    f=least_squares(circle,x0=[pred_center.x,pred_center.y,10],args=(x,y),method='lm')
-
-    a,b,r=float(f.x[0]),float(f.x[1]),float(f.x[2])
-    v=np.transpose(np.array([(x-np.full_like(x,a))**2+(y-np.full_like(x,b))**2-np.full_like(a,r**2)]))
-    std=sqrt(float(np.matmul(np.transpose(v),v))/(v.shape[0]-len(f.x)))
-    #/(v.shape[0]-len(f.x)))
-    #print(std, v.shape[0])
-    if std>.05:
-        global counter
-        counter+=1
-        #print(f'{counter,v.shape[0]}')
-        return polygon
-
-    angles=np.linspace(0,2*pi,int(2*pi/asin(threshold/r)+1))
-    
-    x=np.full_like(angles,a)+np.sin(angles)*np.full_like(angles,r)
-    y=np.full_like(angles,b)+np.cos(angles)*np.full_like(angles,r)
-    
-    puntos_2=np.column_stack((x,y))
-    polygon=shapely.Polygon(puntos_2)
-    return polygon
-    
 if __name__=="__main__":
 
     # cir=VectorDataset(os.path.join(BASE_DIR,'collab','rotonda.geojson'))

@@ -1,13 +1,6 @@
-import os,sys
-# Get the root directory
-root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-
-# Add the root directory to sys.path
-sys.path.append(root_dir)
-
 from package import *
-
 from package.raster_utilities import Ortophoto,Tile,folder_check
+
 from concurrent.futures import ProcessPoolExecutor
 
 import geopandas as gpd, pandas as pd, numpy as np
@@ -15,7 +8,7 @@ import time
 from functools import partial
 from collections import ChainMap
 
-folder_check(TEMP_DIR)
+print(folder_check(TEMP_DIR))
 
 def choose_model(name):
     #CREAR DATASET
@@ -136,13 +129,13 @@ def create_files_from_sql(tab,column,tile_names,file_names,crs=25831):
 if __name__=="__main__":
     #choose_model
     #model class has optimal resolution attribute
-    # from samgeo import SamGeo
+    from samgeo import SamGeo
     
-    # sam = SamGeo(
-    #   model_type="vit_h",
-    #   automatic=False,
-    #   sam_kwargs=None,
-    #   )
+    sam = SamGeo(
+       model_type="vit_h",
+       automatic=False,
+       sam_kwargs=None,
+       )
     
     t0=time.time()
     #gdf=gpd.read_file(os.path.join(OUT_DIR,'tanks_50c_40iou.geojson'))
@@ -184,37 +177,39 @@ if __name__=="__main__":
     data_loaded_post_processing=partial(post_processing,input_image=input_image,detections=detections)
     
     depths=[depth for depth in range(input_image.pyramid_depth)]
-    # # with ProcessPoolExecutor() as Executor:
-    # #result=list(map(data_loaded_post_processing,depths))
-    # results=dict(ChainMap(*result))
-    # from itertools import chain
-    # contained_boxes=list(chain(*[results[i].get('CONTAINED_BOXES','NO') for i in results.keys()]))
-    # contained_tiles=list(chain(*[results[i].get('CONTAINED_TILES','NO') for i in results.keys()]))
+    
+    with ProcessPoolExecutor() as Executor:
+        result=list(map(data_loaded_post_processing,depths))
+    results=dict(ChainMap(*result))
+    
+    from itertools import chain
+    contained_boxes=list(chain(*[results[i].get('CONTAINED_BOXES','NO') for i in results.keys()]))
+    contained_tiles=list(chain(*[results[i].get('CONTAINED_TILES','NO') for i in results.keys()]))
 
-    for depth in range(input_image.pyramid_depth):
-        pyramid_dir=input_image.pyramid
-        exiters,final=filter_level(detections,pyramid_dir,depth,'geom')
-        level_dir=folder_check(os.path.join(results_dir,str(depth)))
-        contained_dir=folder_check(os.path.join(level_dir,'contained'))
-        limit_dir=folder_check(os.path.join(level_dir,'limit'))
+    # for depth in range(input_image.pyramid_depth):
+    #     pyramid_dir=input_image.pyramid
+    #     exiters,final=filter_level(detections,pyramid_dir,depth,'geom')
+    #     level_dir=folder_check(os.path.join(results_dir,str(depth)))
+    #     contained_dir=folder_check(os.path.join(level_dir,'contained'))
+    #     limit_dir=folder_check(os.path.join(level_dir,'limit'))
 
         
-        def create_geojson_mass(table,name_field,output_directory,crs=25831,geometry_column='geom'):
-            #select=table.select('*')
-            # select=DUCKDB.sql(f'''SELECT {name_field},ST_COLLECT(LIST({geometry_column})) geom
-            #     FROM table_relation
-            #     GROUP BY {name_field}
-            # ''')
+    #     def create_geojson_mass(table,name_field,output_directory,crs=25831,geometry_column='geom'):
+    #         #select=table.select('*')
+    #         # select=DUCKDB.sql(f'''SELECT {name_field},ST_COLLECT(LIST({geometry_column})) geom
+    #         #     FROM table_relation
+    #         #     GROUP BY {name_field}
+    #         # ''')
 
             
-            tile_names=list(table.fetchnumpy()[name_field])
-            file_names=[os.path.join(output_directory,os.path.splitext(os.path.basename(t))[0]) for t in tile_names]
-            create_files_from_sql(table,name_field,tile_names,file_names,crs)
+    #         tile_names=list(table.fetchnumpy()[name_field])
+    #         file_names=[os.path.join(output_directory,os.path.splitext(os.path.basename(t))[0]) for t in tile_names]
+    #         create_files_from_sql(table,name_field,tile_names,file_names,crs)
 
 
         
         
-    create_geojson_mass(exiters,'NAME',contained_dir)
+    #create_geojson_mass(exiters,'NAME',contained_dir)
     #create_geojson_mass(final,'MOSAIC',limit_dir)
         
     #     create_bboxes_sam(exiters,'NAME')
@@ -267,9 +262,12 @@ if __name__=="__main__":
             out_name (str): Name for the output file, can be either vector (GeoJSON) or Raster (GeoTIFF)
         """
         sam.set_image(image_path)
-        sam.predict(boxes=boxes, point_crs="EPSG:4326", output=out_name, dtype="uint8")
+        # sam.predict(boxes=boxes, point_crs="EPSG:4326", output=out_name, dtype="uint8")
+    sam.set_image(contained_tiles[10])
+
     
-    out_names=[f'mask_{i}.tif' for i in range(2)]      
+    out_names=[f'mask_{i}.tif' for i in range(len(contained_boxes))]   
+    sam.predict(boxes=contained_boxes[10][0],point_crs='EPSG:4326',output=os.path.join(OUT_DIR,'data_mask.tif'),dtype="uint8")   
     # with ProcessPoolExecutor() as Executor:
     #     Executor.map(predict_tile,contained_tiles,contained_boxes,out_names)  
 

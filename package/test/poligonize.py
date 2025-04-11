@@ -1,11 +1,3 @@
-import os,sys
-
-# Get the root directory
-root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-
-# Add the root directory to sys.path
-sys.path.append(root_dir)
-
 from package.raster_utilities import *
 
 if __name__=="__main__":

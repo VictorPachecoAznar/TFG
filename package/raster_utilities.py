@@ -1,5 +1,4 @@
 from osgeo import gdal, osr
-import os
 import subprocess
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial

@@ -12,10 +12,18 @@ from package import *
 import geopandas as gpd , pandas as pd, numpy as np
 from pyproj import Proj,Transformer,CRS
 
+def vector_deg_to_DMS(alpha):
+        alpha=np.array(alpha)
+        dd=np.abs(np.astype(alpha,np.uint8))
+        min=np.abs(np.astype((np.abs(alpha)-dd)*60,np.uint8))
+        sec=np.abs(((((np.abs(alpha)-dd)*60)-min)*60))
+        signs=np.array(np.sign(alpha))
+        return (signs*dd.astype(np.int8),signs*min.astype(np.int8),signs*sec)
+        
 def quality_control_point_creation(from_crs=25831,geographic_crs=4258):
     """Data processing from the points with averaging
     """
-    df=pd.read_csv(os.path.join(DATA_DIR,'COMPROV ORTO.txt'),sep=' ')
+    df=pd.read_csv(os.path.join(DATA_DIR,'COMPROV ORTO.txt'),header=0,sep=' ')
     gdf=gpd.GeoDataFrame(df,geometry=gpd.points_from_xy(df['X'],df['Y']),crs=from_crs)
     
     projection=Proj(from_crs)
@@ -24,23 +32,30 @@ def quality_control_point_creation(from_crs=25831,geographic_crs=4258):
     
     gdf=gdf.to_crs(geographic_crs)
     gdf['LAT'],gdf['LON'],gdf['h']=transformer.transform(gdf['X'],gdf['Y'],gdf['Z'])
+    
+    ltd,ltm,lts=vector_deg_to_DMS(gdf['LAT'])
+    gdf[['LTD','LTM','LTS']]=pd.DataFrame({'LTD':ltd,'LTM':ltm,'LTS':lts})
+    
+    lnd,lnm,lns=vector_deg_to_DMS(gdf['LON'])
+    gdf[['LND','LNM','LNS']]=pd.DataFrame({'LND':lnd,'LNM':lnm,'LNS':lns})
+    
     gdf['K']=projection.get_factors(gdf['LON'],gdf['LAT']).meridional_scale
     
     file_path = os.path.join(DATA_DIR,'SURVEYING.xlsx')
     
-    # WAIT FOR GTX FILE
-    geoid_tiff=os.path.join(DATA_DIR,'geodesy','EGM08D595_4258.tif')
-    "gdal_translate c:\\dev\\TFG\\data\\geodesy\\EGM08D595_4258.tif c:\\dev\\TFG\\data\\geodesy\\EGM08D595_4258.gtx"
-    geoid_grid=os.path.join(DATA_DIR,'geodesy','EGM08D595_4258.gtx')
-    crs_egm08d595 = CRS.from_proj4(
-         f'''+proj=vgridshift +grids={geoid_grid}''')
+    # # WAIT FOR GTX FILE
+    # geoid_tiff=os.path.join(DATA_DIR,'geodesy','EGM08D595_4258.tif')
+    # "gdal_translate c:\\dev\\TFG\\data\\geodesy\\EGM08D595_4258.tif c:\\dev\\TFG\\data\\geodesy\\EGM08D595_4258.gtx"
+    # geoid_grid=os.path.join(DATA_DIR,'geodesy','EGM08D595_4258.gtx')
+    # crs_egm08d595 = CRS.from_proj4(
+    #      f'''+proj=vgridshift +grids={geoid_grid}''')
     
     aux_in=os.path.join(BASE_DIR,'input.dat')
     aux_out=os.path.join(BASE_DIR,'output_UTM_eh.dat')
     
     
     with open(aux_in, "w") as f:
-        f.write(df[['X','Y','Z']].to_string(header=None,justify="right"))
+        f.write(df[['X','Y','Z']].to_string(header=0,justify="right"))
     f.close()
     import subprocess
     result = subprocess.run(os.path.join(SHELL_DIR,'UTMOHehx.exe'), shell=True, capture_output=True, text=True)
@@ -52,7 +67,10 @@ def quality_control_point_creation(from_crs=25831,geographic_crs=4258):
     valid_columns=prev_df.columns[1:] 
     prev_df=prev_df.drop(columns=prev_df.columns[-1])
     prev_df.columns=valid_columns
+    prev_df=prev_df.reset_index(drop=True)
+    gdf['N']=prev_df['Ondulacio']
     gdf['h']=prev_df['eh']
+    print(prev_df)
     
     workbook = load_workbook(file_path,data_only=False)
     # for sheet in workbook.sheetnames:
@@ -66,7 +84,7 @@ def quality_control_point_creation(from_crs=25831,geographic_crs=4258):
 
     df_excel = pd.read_excel(file_path, sheet_name=sheet.title)
     df_excel = df_excel.reindex(range(len(gdf)), fill_value=np.nan)
-    df_excel[['X_UTM','Y_UTM','LAT','LON','K','H','h','CODI']] = gdf[['X','Y','LAT','LON','K','Z','h','P']].values
+    df_excel[['X_UTM','Y_UTM','LAT','LTD','LTM','LTS','LON','LND','LNM','LNS','K','H','h','N','CODI']] = gdf[['X','Y','LAT','LTD','LTM','LTS','LON','LND','LNM','LNS','K','Z','h','N','P']].values
     df_excel['CRS']='ETRS89'
     df_excel['GEOIDE']='EGM08D595'
     
