@@ -1,12 +1,5 @@
-import os,sys
-# Get the root directory
-root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-
-# Add the root directory to sys.path
-sys.path.append(root_dir)
-
 from package import *
-from raster_utilities import Ortophoto
+from package.raster_utilities import Ortophoto
 from package.scripts.NDVI import safe_divide
 import numpy as np
 
@@ -14,7 +7,8 @@ import cv2 as cv
 image=os.path.join(DATA_DIR,'ORTO_ZAL_BCN.tif')
 zal=Ortophoto(os.path.join(DATA_DIR,'ORTO_ZAL_BCN.tif'))#,'ORTO_ZAL_BCN_pyramid','raster','subset_4','tile_1024_grid_00_00.tif'))
 r,b,g=mat=zal.raster.ReadAsArray()
-gli=(3*g-r-b)/(3*g+r+b)
+#passar a float
+gli=(2*g-r-b)/(2*g+r+b)
 #Cbinary=np.where(gli>50,255,0)
 zal.cloneBand(gli,(os.path.join(DATA_DIR,'gli_float.tif')))
 # rgbi=((g*g)-(r*b))/((g*g)+(r*b))
