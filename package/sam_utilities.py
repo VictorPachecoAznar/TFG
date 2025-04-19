@@ -1,7 +1,7 @@
 from package import *
 from package.raster_utilities import Ortophoto,Tile,folder_check
 import cv2, numpy as np
-from samgeo import SamGeo
+from samgeo import *
 from samgeo.common import *
 
 class SamGeo_apb(SamGeo):
@@ -34,17 +34,14 @@ class SamGeo_apb(SamGeo):
                 raise ValueError(f"Input path {image} does not exist.")
 
             self.source = image
-
-            image = cv2.imread(image)
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            self.image = image
-        elif isinstance(image, np.ndarray):
+            image=Ortophoto(image).raster.ReadAsArray()
             ar=image[:3,:,:]
             arr=np.transpose(ar,(2,1,0))
             rgb_image=cv2.cvtColor(arr,cv2.COLOR_BGR2RGB)
             self.image=rgb_image
+        elif isinstance(image, np.ndarray):
+            pass
         else:
             raise ValueError("Input image must be either a path or a numpy array.")
 
         self.predictor.set_image(self.image, image_format=image_format)
-    

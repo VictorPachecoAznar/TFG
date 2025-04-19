@@ -171,9 +171,9 @@ if __name__=="__main__":
         ''')
         tiles_names=np.unique(sel_tab.fetchdf()[name_field])
         files_names=[os.path.join(output_directory,os.path.splitext(os.path.basename(i))[0]) for i in tiles_names]
-        tiles_matrices=[Ortophoto(i).raster.ReadAsArray() for i in tiles_names]
+
         create_files_from_sql(tab=sel_tab,column=name_field,tile_names=tiles_names,file_names=files_names,crs=crs)
-        return tiles_matrices,files_names
+        return tiles_names,files_names
 
     def create_level_dirs(results_dir,depth):
         level_dir=folder_check(os.path.join(results_dir,str(depth)))
@@ -213,6 +213,11 @@ if __name__=="__main__":
     contained_tiles=list(chain(*[results[i].get('CONTAINED_TILES','NO') for i in results.keys()]))
     limit_boxes=list(chain(*[results[i].get('LIMIT_BOXES','NO') for i in results.keys()]))
     limit_tiles=list(chain(*[results[i].get('LIMIT_TILES','NO') for i in results.keys()]))
+    
+    # contained_boxes=[{i:results[i].get('CONTAINED_BOXES','NO')} for i in results.keys()]
+    # contained_tiles=[{i:results[i].get('CONTAINED_TILES','NO')} for i in results.keys()]
+    # limit_boxes=[{i:results[i].get('LIMIT_BOXES','NO')} for i in results.keys()]
+    # limit_tiles=[{i:results[i].get('LIMIT_TILES','NO')} for i in results.keys()]
 
     
     
@@ -226,6 +231,7 @@ if __name__=="__main__":
         """
         if isinstance(boxes,str):
             boxes+='.geojson'
+            out_name+='.tif'
             if os.path.exists(boxes):
                 sam.set_image(image_path)
                 try:
