@@ -3,6 +3,7 @@ from package.raster_utilities import Ortophoto,Tile,folder_check
 import cv2, numpy as np
 from samgeo import *
 from samgeo.common import *
+# from package.sam_predictor_utilities import SamPredictorAPB
 
 class SamGeo_apb(SamGeo):
     def __init__(self,
@@ -45,3 +46,163 @@ class SamGeo_apb(SamGeo):
             raise ValueError("Input image must be either a path or a numpy array.")
 
         self.predictor.set_image(self.image, image_format=image_format)
+    
+    def predict(
+        self,
+        point_coords=None,
+        point_labels=None,
+        boxes=None,
+        point_crs=None,
+        mask_input=None,
+        multimask_output=True,
+        return_logits=False,
+        output=None,
+        index=None,
+        mask_multiplier=255,
+        dtype="float32",
+        return_results=False,
+        **kwargs,
+    ):
+        """Predict masks for the given input prompts, using the currently set image.
+
+        Args:
+            point_coords (str | dict | list | np.ndarray, optional): A Nx2 array of point prompts to the
+                model. Each point is in (X,Y) in pixels. It can be a path to a vector file, a GeoJSON
+                dictionary, a list of coordinates [lon, lat], or a numpy array. Defaults to None.
+            point_labels (list | int | np.ndarray, optional): A length N array of labels for the
+                point prompts. 1 indicates a foreground point and 0 indicates a background point.
+            point_crs (str, optional): The coordinate reference system (CRS) of the point prompts.
+            boxes (list | np.ndarray, optional): A length 4 array given a box prompt to the
+                model, in XYXY format.
+            mask_input (np.ndarray, optional): A low resolution mask input to the model, typically
+                coming from a previous prediction iteration. Has form 1xHxW, where for SAM, H=W=256.
+                multimask_output (bool, optional): If true, the model will return three masks.
+                For ambiguous input prompts (such as a single click), this will often
+                produce better masks than a single prediction. If only a single
+                mask is needed, the model's predicted quality score can be used
+                to select the best mask. For non-ambiguous prompts, such as multiple
+                input prompts, multimask_output=False can give better results.
+            return_logits (bool, optional): If true, returns un-thresholded masks logits
+                instead of a binary mask.
+            output (str, optional): The path to the output image. Defaults to None.
+            index (index, optional): The index of the mask to save. Defaults to None,
+                which will save the mask with the highest score.
+            mask_multiplier (int, optional): The mask multiplier for the output mask, which is usually a binary mask [0, 1].
+            dtype (np.dtype, optional): The data type of the output image. Defaults to np.float32.
+            return_results (bool, optional): Whether to return the predicted masks, scores, and logits. Defaults to False.
+
+        """
+        out_of_bounds = []
+
+        if isinstance(boxes, str):
+            gdf = gpd.read_file(boxes)
+            if gdf.crs is not None:
+                gdf = gdf.to_crs("epsg:4326")
+            boxes = gdf.geometry.bounds.values.tolist()
+        elif isinstance(boxes, dict):
+            import json
+
+            geojson = json.dumps(boxes)
+            gdf = gpd.read_file(geojson, driver="GeoJSON")
+            boxes = gdf.geometry.bounds.values.tolist()
+
+        if isinstance(point_coords, str):
+            point_coords = vector_to_geojson(point_coords)
+
+        if isinstance(point_coords, dict):
+            point_coords = geojson_to_coords(point_coords)
+
+        if hasattr(self, "point_coords"):
+            point_coords = self.point_coords
+
+        if hasattr(self, "point_labels"):
+            point_labels = self.point_labels
+
+        if (point_crs is not None) and (point_coords is not None):
+            point_coords, out_of_bounds = coords_to_xy(
+                self.source, point_coords, point_crs, return_out_of_bounds=True
+            )
+
+        if isinstance(point_coords, list):
+            point_coords = np.array(point_coords)
+
+        if point_coords is not None:
+            if point_labels is None:
+                point_labels = [1] * len(point_coords)
+            elif isinstance(point_labels, int):
+                point_labels = [point_labels] * len(point_coords)
+
+        if isinstance(point_labels, list):
+            if len(point_labels) != len(point_coords):
+                if len(point_labels) == 1:
+                    point_labels = point_labels * len(point_coords)
+                elif len(out_of_bounds) > 0:
+                    print(f"Removing {len(out_of_bounds)} out-of-bound points.")
+                    point_labels_new = []
+                    for i, p in enumerate(point_labels):
+                        if i not in out_of_bounds:
+                            point_labels_new.append(p)
+                    point_labels = point_labels_new
+                else:
+                    raise ValueError(
+                        "The length of point_labels must be equal to the length of point_coords."
+                    )
+            point_labels = np.array(point_labels)
+
+        predictor = self.predictor
+
+        input_boxes = None
+        if isinstance(boxes, list) and (point_crs is not None):
+            coords = bbox_to_xy(self.source, boxes, point_crs)
+            input_boxes = np.array(coords)
+            if isinstance(coords[0], int):
+                input_boxes = input_boxes[None, :]
+            else:
+                input_boxes = torch.tensor(input_boxes, device=self.device)
+                input_boxes = predictor.transform.apply_boxes_torch(
+                    input_boxes, self.image.shape[:2]
+                )
+        elif isinstance(boxes, list) and (point_crs is None):
+            input_boxes = np.array(boxes)
+            if isinstance(boxes[0], int):
+                input_boxes = input_boxes[None, :]
+
+        self.boxes = input_boxes
+
+        if (
+            boxes is None
+            or (len(boxes) == 1)
+            or (len(boxes) == 4 and isinstance(boxes[0], float))
+        ):
+            if isinstance(boxes, list) and isinstance(boxes[0], list):
+                boxes = boxes[0]
+            masks, scores, logits = predictor.predict(
+                point_coords,
+                point_labels,
+                np.array(input_boxes.cpu()),
+                mask_input,
+                multimask_output,
+                return_logits,
+            )
+        else:
+            masks, scores, logits = predictor.predict_torch(
+                point_coords=point_coords,
+                point_labels=point_coords,
+                boxes=input_boxes,
+                multimask_output=True,
+            )
+
+        self.masks = masks
+        self.scores = scores
+        self.logits = logits
+
+        if output is not None:
+            if boxes is None or (not isinstance(boxes[0], list)):
+                self.save_prediction(output, index, mask_multiplier, dtype, **kwargs)
+            else:
+                self.tensor_to_numpy(
+                    index, output, mask_multiplier, dtype, save_args=kwargs
+                )
+
+        if return_results:
+            return masks, scores, logits

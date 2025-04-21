@@ -202,9 +202,9 @@ if __name__=="__main__":
     depths=[depth for depth in range(input_image.pyramid_depth)]
     
     with ProcessPoolExecutor() as Executor:
-        result=list(map(data_loaded_post_processing,depths))
+        #result=list(map(data_loaded_post_processing,depths))
         geojson_result=list(map(data_loaded_geojson_post_processing,depths))
-    results=dict(ChainMap(*result))
+    #results=dict(ChainMap(*result))
     results=dict(ChainMap(*geojson_result))
     
     from itertools import chain
@@ -214,6 +214,7 @@ if __name__=="__main__":
     limit_boxes=list(chain(*[results[i].get('LIMIT_BOXES','NO') for i in results.keys()]))
     limit_tiles=list(chain(*[results[i].get('LIMIT_TILES','NO') for i in results.keys()]))
     
+    #[contained_tiles,contained_boxes,limit_tiles,limit_boxes] =[[{level:results[level].get(element,'NO')} for level in results.keys()] for element in results.keys().mapping[0].keys()]
     # contained_boxes=[{i:results[i].get('CONTAINED_BOXES','NO')} for i in results.keys()]
     # contained_tiles=[{i:results[i].get('CONTAINED_TILES','NO')} for i in results.keys()]
     # limit_boxes=[{i:results[i].get('LIMIT_BOXES','NO')} for i in results.keys()]
@@ -231,26 +232,44 @@ if __name__=="__main__":
         """
         if isinstance(boxes,str):
             boxes+='.geojson'
-            out_name+='.tif'
             if os.path.exists(boxes):
                 sam.set_image(image_path)
                 try:
                     sam.predict(boxes=boxes, point_crs="EPSG:4326", output=out_name, dtype="uint8")
+                    print('out')
                 except:
-                    print(f'{out_name} could not be loaded')
+                    try: 
+                        sam.predict(boxes=boxes, point_crs="EPSG:25831", output=out_name, dtype="uint8")
+                    except:
+                        print(f'{out_name} could not be loaded')
+        else:
+            print('ONLY GEOJSON FILES ALLOWED')
 
     sam_out_dir=folder_check(os.path.join(OUT_DIR,'sammed_images'))
-    sam_contained_dir=folder_check(os.path.join(sam_out_dir,'contained'))
-    sam_limit_dir=folder_check(os.path.join(sam_out_dir,'limit'))
 
-    contained_sam_out_images=[os.path.join(sam_contained_dir,os.path.basename(i)) for i in contained_boxes]
-    limit_sam_out_images=[os.path.join(sam_limit_dir,os.path.basename(i)) for i in limit_boxes]
+    def create_sam_dirs(sam_out_dir,depth,contained_sam_out_images=[],limit_sam_out_images=[]):
+        level_sam_dir=folder_check(os.path.join(sam_out_dir,f'subset_{depth}'))
+        sam_contained_dir=folder_check(os.path.join(level_sam_dir,'contained'))
+        sam_limit_dir=folder_check(os.path.join(level_sam_dir,'limit'))
+
+        contained_sam_out_images.extend([os.path.join(sam_contained_dir,os.path.basename(i)+'.tif') for i in results[depth].get('CONTAINED_BOXES','NO')])
+        limit_sam_out_images.extend([os.path.join(sam_limit_dir,os.path.basename(i)+'.vrt') for i in results[depth].get('LIMIT_BOXES','NO')])
+        return contained_sam_out_images,limit_sam_out_images
+    
+    contained_sam_out_images,limit_sam_out_images=[],[]
+    for depth in depths:
+        contained_sam_out_images,limit_sam_out_images=create_sam_dirs(sam_out_dir,depth,contained_sam_out_images,limit_sam_out_images) 
 
     #running
-    list(map(predict_tile,contained_tiles,contained_boxes,contained_sam_out_images))
-    list(map(predict_tile,limit_tiles,limit_boxes,limit_sam_out_images))
     
+    list(map(predict_tile,contained_tiles,contained_boxes,contained_sam_out_images))
+    
+    #list(map(predict_tile,limit_tiles,limit_boxes,limit_sam_out_images))
         
     t1=time.time()
+    list(map(predict_tile,contained_tiles,contained_boxes,contained_sam_out_images))
+
+
+    predict_tile(limit_tiles[0],limit_boxes[0],limit_sam_out_images[0])
     print(f'{t1-t0}')
     pass    
