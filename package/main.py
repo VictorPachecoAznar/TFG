@@ -199,15 +199,15 @@ if __name__=="__main__":
         return {depth:{'CONTAINED_TILES':contained_tiles,'CONTAINED_BOXES':contained_boxes,'LIMIT_TILES':limit_tiles,'LIMIT_BOXES':limit_boxes}}
     
     detections=read_file(os.path.join(OUT_DIR,'QGIS_BUILDINGS','ORIENTED_BOXES.GEOJSON'))
-    #data_loaded_post_processing=partial(post_processing,input_image=input_image,detections=detections)
-    data_loaded_geojson_post_processing=partial(post_processing_geojson,results_dir=results_dir,input_image=input_image,detections=detections)
+    data_loaded_post_processing=partial(post_processing,input_image=input_image,detections=detections)
+    #data_loaded_geojson_post_processing=partial(post_processing_geojson,results_dir=results_dir,input_image=input_image,detections=detections)
     depths=[depth for depth in range(input_image.pyramid_depth)]
     
-    with ProcessPoolExecutor() as Executor:
-        #result=list(map(data_loaded_post_processing,depths))
-        geojson_result=list(map(data_loaded_geojson_post_processing,depths))
-    #results=dict(ChainMap(*result))
-    results=dict(ChainMap(*geojson_result))
+    #with ProcessPoolExecutor() as Executor:
+    result=list(map(data_loaded_post_processing,depths))
+        #geojson_result=list(map(data_loaded_geojson_post_processing,depths))
+    results=dict(ChainMap(*result))
+    #results=dict(ChainMap(*geojson_result))
     
     from itertools import chain
     
@@ -237,15 +237,26 @@ if __name__=="__main__":
             if os.path.exists(boxes):
                 sam.set_image(image_path)
                 try:
-                    sam.predict(boxes=boxes, point_crs="EPSG:4326", output=out_name, dtype="uint8")
+                    sam.predict(boxes=boxes, output=out_name, dtype="uint8")
                     print('out')
                 except:
                     try: 
-                        sam.predict(boxes=boxes, point_crs="EPSG:25831", output=out_name, dtype="uint8")
+                        sam.predict(boxes=boxes, output=out_name, dtype="uint8")
                     except:
                         print(f'{out_name} could not be loaded')
+                        
+        elif isinstance(boxes,list):
+            sam.set_image(image_path)
+            try:
+                sam.predict(boxes=boxes, point_crs="EPSG:25831", output=out_name, dtype="uint8")
+                print('out')
+            except:
+                try: 
+                    sam.predict(boxes=boxes, point_crs="EPSG:4326", output=out_name, dtype="uint8")
+                except:
+                    print(f'{out_name} could not be loaded')
         else:
-            print('ONLY GEOJSON FILES ALLOWED')
+            print('only GeoJSON or BOX POINT lists allowed')
 
     sam_out_dir=folder_check(os.path.join(input_image.folder,'sammed_images'))
 
@@ -254,8 +265,8 @@ if __name__=="__main__":
         sam_contained_dir=folder_check(os.path.join(level_sam_dir,'contained'))
         sam_limit_dir=folder_check(os.path.join(level_sam_dir,'limit'))
 
-        contained_sam_out_images.extend([os.path.join(sam_contained_dir,os.path.basename(i)+'.tif') for i in results[depth].get('CONTAINED_BOXES','NO')])
-        limit_sam_out_images.extend([os.path.join(sam_limit_dir,os.path.basename(i)+'.tif') for i in results[depth].get('LIMIT_BOXES','NO')])
+        contained_sam_out_images.extend([os.path.join(sam_contained_dir,os.path.basename(i)) for i in results[depth].get('CONTAINED_TILES','NO')])
+        limit_sam_out_images.extend([os.path.join(sam_limit_dir,os.path.basename(i)) for i in results[depth].get('LIMIT_TILES','NO')])
         return contained_sam_out_images,limit_sam_out_images
     
     contained_sam_out_images,limit_sam_out_images=[],[]
@@ -266,8 +277,8 @@ if __name__=="__main__":
     
     #predict_tile(limit_tiles[0],limit_boxes[0],limit_sam_out_images[0])
     #predict_tile(contained_tiles[0],contained_boxes[0],contained_sam_out_images[0])
-    predict_tile(limit_tiles[245],limit_boxes[245],limit_sam_out_images[245])
-    predict_tile(contained_tiles[184],contained_boxes[184],contained_sam_out_images[184])
+    #predict_tile(limit_tiles[245],limit_boxes[245],limit_sam_out_images[245])
+    predict_tile(contained_tiles[183],contained_boxes[183],contained_sam_out_images[183])
 
     #list(map(predict_tile,contained_tiles,contained_boxes,contained_sam_out_images))
     
