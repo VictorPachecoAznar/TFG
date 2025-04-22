@@ -91,7 +91,9 @@ def filter_level(detections,pyramid_dir,depth,geometry_column):
     
     #fun=lambda x:[i for i in x]
     array=[i for i in cleans_indexed['unique_tiles'].fetchnumpy()['unique_tiles']]
-    names=[os.path.join(f'virtuals_{depth}',str(i)) for i in range(1,len(cleans_indexed)+1)]
+    virtuals_dir=folder_check(os.path.join(os.path.dirname(pyramid_dir),'virtuals'))
+    level_virtual_dir=folder_check(os.path.join(virtuals_dir,f'virtuals_{depth}'))
+    names=[os.path.join(level_virtual_dir,str(i)) for i in range(1,len(cleans_indexed)+1)]
     
     with ProcessPoolExecutor(5) as Executor:
         mosaics=list(Executor.map(Ortophoto.mosaic_rasters,array,names))
@@ -140,7 +142,7 @@ if __name__=="__main__":
     #gdf=gpd.read_file(os.path.join(OUT_DIR,'tanks_50c_40iou.geojson'))
     #gdf=prediction_to_bbox(gdf)
     input_image=Tile(os.path.join(DATA_DIR,'ORTO_ZAL_BCN','ORTO_ZAL_BCN_pyramid','raster','subset_2','tile_4096_grid_0_2.tif'))
-    results_dir=folder_check(os.path.join(OUT_DIR,'intersection_results'))
+    results_dir=folder_check(os.path.join(input_image.folder,'intersection_results'))
     
     def create_bboxes_sam(table,name_field,crs=25831,geometry_column='geom'):
         sel_table=table.select('*')
@@ -197,7 +199,7 @@ if __name__=="__main__":
         return {depth:{'CONTAINED_TILES':contained_tiles,'CONTAINED_BOXES':contained_boxes,'LIMIT_TILES':limit_tiles,'LIMIT_BOXES':limit_boxes}}
     
     detections=read_file(os.path.join(OUT_DIR,'QGIS_BUILDINGS','ORIENTED_BOXES.GEOJSON'))
-    data_loaded_post_processing=partial(post_processing,input_image=input_image,detections=detections)
+    #data_loaded_post_processing=partial(post_processing,input_image=input_image,detections=detections)
     data_loaded_geojson_post_processing=partial(post_processing_geojson,results_dir=results_dir,input_image=input_image,detections=detections)
     depths=[depth for depth in range(input_image.pyramid_depth)]
     
@@ -245,7 +247,7 @@ if __name__=="__main__":
         else:
             print('ONLY GEOJSON FILES ALLOWED')
 
-    sam_out_dir=folder_check(os.path.join(OUT_DIR,'sammed_images'))
+    sam_out_dir=folder_check(os.path.join(input_image.folder,'sammed_images'))
 
     def create_sam_dirs(sam_out_dir,depth,contained_sam_out_images=[],limit_sam_out_images=[]):
         level_sam_dir=folder_check(os.path.join(sam_out_dir,f'subset_{depth}'))
@@ -253,23 +255,30 @@ if __name__=="__main__":
         sam_limit_dir=folder_check(os.path.join(level_sam_dir,'limit'))
 
         contained_sam_out_images.extend([os.path.join(sam_contained_dir,os.path.basename(i)+'.tif') for i in results[depth].get('CONTAINED_BOXES','NO')])
-        limit_sam_out_images.extend([os.path.join(sam_limit_dir,os.path.basename(i)+'.vrt') for i in results[depth].get('LIMIT_BOXES','NO')])
+        limit_sam_out_images.extend([os.path.join(sam_limit_dir,os.path.basename(i)+'.tif') for i in results[depth].get('LIMIT_BOXES','NO')])
         return contained_sam_out_images,limit_sam_out_images
     
     contained_sam_out_images,limit_sam_out_images=[],[]
-    for depth in depths:
+    for depth in list(reversed(depths)):
         contained_sam_out_images,limit_sam_out_images=create_sam_dirs(sam_out_dir,depth,contained_sam_out_images,limit_sam_out_images) 
 
     #running
     
-    list(map(predict_tile,contained_tiles,contained_boxes,contained_sam_out_images))
+    #predict_tile(limit_tiles[0],limit_boxes[0],limit_sam_out_images[0])
+    #predict_tile(contained_tiles[0],contained_boxes[0],contained_sam_out_images[0])
+    predict_tile(limit_tiles[245],limit_boxes[245],limit_sam_out_images[245])
+    predict_tile(contained_tiles[184],contained_boxes[184],contained_sam_out_images[184])
+
+    #list(map(predict_tile,contained_tiles,contained_boxes,contained_sam_out_images))
     
     #list(map(predict_tile,limit_tiles,limit_boxes,limit_sam_out_images))
         
     t1=time.time()
-    list(map(predict_tile,contained_tiles,contained_boxes,contained_sam_out_images))
+    #list(map(predict_tile,contained_tiles,contained_boxes,contained_sam_out_images))
 
 
-    predict_tile(limit_tiles[0],limit_boxes[0],limit_sam_out_images[0])
+    #predict_tile(limit_tiles[0],limit_boxes[0],limit_sam_out_images[0])
+    predict_tile(contained_tiles[100],contained_boxes[100],contained_sam_out_images[100])
+
     print(f'{t1-t0}')
     pass    

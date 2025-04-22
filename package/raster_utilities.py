@@ -156,7 +156,11 @@ class Ortophoto():
             root,ext=os.path.splitext(name)
             if ext=='':
                 ext='.vrt' 
-            outdir=folder_check(os.path.join(DATA_DIR,os.path.dirname(name)))
+                
+            if not os.path.exists(name):
+                outdir=folder_check(os.path.join(DATA_DIR,os.path.dirname(name)))
+            else:
+                outdir=name
             outname=os.path.join(outdir,f'{os.path.basename(root)}{ext}')
             paths=" ".join(['"'+str(i)+'"' for i in valid_images])
             
@@ -407,6 +411,7 @@ class Tile(Ortophoto):
         self.pyramid=os.path.dirname(os.path.dirname(os.path.dirname(self.raster_path)))
         self.raster_pyramid=os.path.join(self.pyramid,'raster')
         self.pyramid_depth=len([i  for i in os.listdir(self.raster_pyramid) if os.path.isfile(os.path.join(self.raster_pyramid,i))==False])
+        self.folder=os.path.dirname(self.pyramid)
         #self.children=self.get_children()
 
     def __eq__(self,t2: Ortophoto):

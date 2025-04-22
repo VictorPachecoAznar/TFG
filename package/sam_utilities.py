@@ -37,7 +37,7 @@ class SamGeo_apb(SamGeo):
             self.source = image
             image=Ortophoto(image).raster.ReadAsArray()
             ar=image[:3,:,:]
-            arr=np.transpose(ar,(2,1,0))
+            arr=np.transpose(ar,(1,2,0))
             rgb_image=cv2.cvtColor(arr,cv2.COLOR_BGR2RGB)
             self.image=rgb_image
         elif isinstance(image, np.ndarray):
