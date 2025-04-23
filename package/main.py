@@ -153,11 +153,12 @@ if __name__=="__main__":
         #     GROUP BY {name_field}''')
         boxes_table=DUCKDB.sql(f'''
              SELECT {name_field},LIST(geom) geom
-             FROM(SELECT {name_field}, ST_EXTENT({geometry_column}) geom
+             FROM(SELECT {name_field}, ST_FLIPCOORDINATES(ST_EXTENT(ST_TRANSFORM({geometry_column},'EPSG:25831','EPSG:4326'))) geom
                      FROM sel_table)
              GROUP BY {name_field}''')
-        tile_names=boxes_table.fetchnumpy()[name_field]
-        boxes=[list([list(j.values()) for j in i]) for i in boxes_table.fetchnumpy()['geom']]
+        df=boxes_table.fetchdf().reset_index()
+        tile_names=df[name_field]
+        boxes=[list([list(j.values()) for j in i]) for i in df['geom']]
         return tile_names, boxes
     
     def create_geojson_mass(table,name_field,output_directory,crs=25831,geometry_column='geom'):
@@ -248,7 +249,7 @@ if __name__=="__main__":
         elif isinstance(boxes,list):
             sam.set_image(image_path)
             try:
-                sam.predict(boxes=boxes, point_crs="EPSG:25831", output=out_name, dtype="uint8")
+                sam.predict(boxes=boxes,point_crs='EPSG:4326', output=out_name, dtype="uint8")
                 print('out')
             except:
                 try: 
@@ -266,7 +267,7 @@ if __name__=="__main__":
         sam_limit_dir=folder_check(os.path.join(level_sam_dir,'limit'))
 
         contained_sam_out_images.extend([os.path.join(sam_contained_dir,os.path.basename(i)) for i in results[depth].get('CONTAINED_TILES','NO')])
-        limit_sam_out_images.extend([os.path.join(sam_limit_dir,os.path.basename(i)) for i in results[depth].get('LIMIT_TILES','NO')])
+        limit_sam_out_images.extend([os.path.join(sam_limit_dir,os.path.splitext(os.path.basename(i))[0]+'.tif') for i in results[depth].get('LIMIT_TILES','NO')])
         return contained_sam_out_images,limit_sam_out_images
     
     contained_sam_out_images,limit_sam_out_images=[],[]
@@ -278,18 +279,16 @@ if __name__=="__main__":
     #predict_tile(limit_tiles[0],limit_boxes[0],limit_sam_out_images[0])
     #predict_tile(contained_tiles[0],contained_boxes[0],contained_sam_out_images[0])
     #predict_tile(limit_tiles[245],limit_boxes[245],limit_sam_out_images[245])
-    predict_tile(contained_tiles[183],contained_boxes[183],contained_sam_out_images[183])
-
-    #list(map(predict_tile,contained_tiles,contained_boxes,contained_sam_out_images))
-    
-    #list(map(predict_tile,limit_tiles,limit_boxes,limit_sam_out_images))
+    #predict_tile(contained_tiles[183],contained_boxes[183],contained_sam_out_images[183])
+    list(map(predict_tile,contained_tiles,contained_boxes,contained_sam_out_images))
+    list(map(predict_tile,limit_tiles,limit_boxes,limit_sam_out_images))
         
     t1=time.time()
     #list(map(predict_tile,contained_tiles,contained_boxes,contained_sam_out_images))
 
 
     #predict_tile(limit_tiles[0],limit_boxes[0],limit_sam_out_images[0])
-    predict_tile(contained_tiles[100],contained_boxes[100],contained_sam_out_images[100])
+    #predict_tile(contained_tiles[100],contained_boxes[100],contained_sam_out_images[100])
 
     print(f'{t1-t0}')
     pass    

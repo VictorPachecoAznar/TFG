@@ -44,11 +44,12 @@ def bbox_to_xy(
     new_coords = []
 
     with rasterio.open(src_fp) as src:
-        transform=src.transform
-        (x_step,min_width,y_step,max_height)=transform[0],transform[2],transform[4],transform[5]
-        max_width = min_width+src.width*x_step
-        min_height = max_height+src.height*y_step
-
+        #transform=src.transform
+        #(x_step,min_width,y_step,max_height)=transform[0],transform[2],transform[4],transform[5]
+        #max_width = min_width+src.width*x_step
+        #min_height = max_height+src.height*y_step
+        min_width,min_height=0,0
+        max_width,max_height=src.width,src.height
         for coord in coords:
             minx, miny, maxx, maxy = coord
 
