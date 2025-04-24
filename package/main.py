@@ -7,6 +7,7 @@ import geopandas as gpd, pandas as pd, numpy as np
 import time
 from functools import partial
 from collections import ChainMap
+from collections.abc import Iterable
 
 print(folder_check(TEMP_DIR))
 
@@ -14,27 +15,66 @@ def choose_model(name):
     #CREAR DATASET
     pass
 
-def prediction_to_bbox(gdf):
+def prediction_to_bbox(gdf: gpd.GeoDataFrame, crs=25831):
+    """Generates the oriented envelope of a geodataframe
+
+    Args:
+        gdf (gpd.GeoDataFrame): Polygon geometry
+        crs (int, optional):  CRS as EPSG code. Defaults to 25831.
+
+    Returns:
+        gpd.GeoDataFrame: Rotated envelope geometry
+    """
     wkts=[g.boundary.oriented_envelope.wkt for g in gdf.geometry]
     #nl= [x for xs in li for x in xs]
-    newgdf=gpd.GeoDataFrame(gdf,geometry=gpd.GeoSeries.from_wkt(wkts),crs=25831)
+    newgdf=gpd.GeoDataFrame(gdf,geometry=gpd.GeoSeries.from_wkt(wkts),crs=crs)
     return newgdf
 
 def read_file(path,DUCKDB=DUCKDB):
+    """Geospatial data reader for DuckDB
+
+    Args:
+        path (str): Path to the file
+        DUCKDB (duckdb.DuckDBPyConnection, optional): Defaults to DUCKDB (environment variable).
+
+    Returns:
+        duckdb.DuckDBPyRelation: Table containing the elements
+    """
     return DUCKDB.sql(f'''SELECT *
             FROM ST_READ('{path}')''')
     
-def duckdb_2_gdf(duck:duckdb.DuckDBPyRelation,geometry_column):
+def duckdb_2_gdf(tab: duckdb.DuckDBPyRelation,geometry_column,crs=25831):
+    """Generates a GeoDataFrame from DuckDB
+
+    Args:
+        tab (duckdb.DuckDBPyRelation): Geospatial able to export from DUCKDB
+        geometry_column (str): Name for the geometry column
+        crs (int, optional):  CRS as EPSG code. Defaults to 25831.
+
+    Returns:
+        gpd.GeoDataFrame: Returngs the same data wiht 
+    """
     temp='affected.csv'
-    DUCKDB.sql(f'''COPY duck TO '{temp}' WITH (HEADER, DELIMITER ';')''')
+    DUCKDB.sql(f'''COPY tab TO '{temp}' WITH (HEADER, DELIMITER ';')''')
     df=pd.read_csv(temp,sep=';')
-    geodf=gpd.GeoDataFrame(df,geometry=gpd.GeoSeries.from_wkt(df[geometry_column]),crs=25831)
+    geodf=gpd.GeoDataFrame(df,geometry=gpd.GeoSeries.from_wkt(df[geometry_column]),crs=crs)
     geodf=geodf.drop(columns=[geometry_column])
     os.remove(temp)
     return geodf
 
+
 def filter_level(detections,pyramid_dir,depth,geometry_column):
-    
+    """Finds which elements are contained and limiting to each tile, prompting the creation of virtual layers
+
+    Args:        
+        detections (duckdb.DuckDBPyRelation): Table with the polygon geometries to be used as box prompts
+        pyramid_dir (str): Path to the image pyramid
+        depth (int): The level of the pyramid to be built.
+        geometry_column (str): : Name for the geometry column.
+
+    Returns:
+        _type_: _description_
+    """
     tiles=read_file(os.path.join(pyramid_dir,'vector',f"subset_{depth}.geojson"))
     detections=detections.select('*')
     #CONNECT PREDICTION TO TILE
@@ -114,8 +154,16 @@ def filter_level(detections,pyramid_dir,depth,geometry_column):
 
     return exiters, final
     
-
 def create_file_from_sql(table,column,name,file_name,crs):
+    """Creates a GeoJSON file from an SQL projection ("SELECT" operation into a column)
+
+    Args:
+        table (duckdb.DuckDBPyRelation): Table to which the select operation will be applied to 
+        column (str): Name for the column that will perform
+        name (_type_): _description_
+        file_name (_type_): _description_
+        crs (_type_): _description_
+    """
     db=table.filter(f"{column}= '{name}'")
     DUCKDB.sql(
         f'''COPY db
@@ -123,9 +171,184 @@ def create_file_from_sql(table,column,name,file_name,crs):
             WITH (FORMAT gdal, DRIVER 'GeoJSON', LAYER_CREATION_OPTIONS 'WRITE_BBOX=YES',SRS 'EPSG:{crs}');
         ''')
     
-def create_files_from_sql(tab,column,tile_names,file_names,crs=25831):
+def create_files_from_sql(tab: duckdb.DuckDBPyRelation, column:str, tile_names: Iterable,file_names:Iterable,crs=25831):
+    """_summary_
+
+    Args:
+        tab (duckdb.DuckDBPyRelation): _description_
+        column (str): Name field containing the data for the element selection. Equivalent to X, as in SELECT X.
+        tile_names (Iterable): Paths for each tile
+        file_names (Iterable): Output file names without extension. They will be stored as GeoJSON
+        crs (int, optional):  CRS as EPSG code. Defaults to 25831.
+    """
     for (name,filename) in zip(tile_names,file_names):
         create_file_from_sql(tab,column,name,filename,crs)
+        
+def create_bboxes_sam(table: duckdb.DuckDBPyRelation,name_field: str,crs=25831,geometry_column='geom'):
+    """Generation of Bounding Boxes to be used as prompts for SAM.
+
+    Args:
+        table (duckdb.DuckDBPyRelation):  Table containing the geometries and the tiles (original or virtual) they are associated with.
+        name_field (str): Name field containing the data for the element.
+        crs (int, optional): CRS as EPSG code. Defaults to 25831.
+        geometry_column (str, optional): Name for the geometry column. Defaults to 'geom'.
+
+    Returns:
+        _type_: _description_
+    """
+    sel_table=table.select('*')
+    # boxes_table=DUCKDB.sql(f'''
+    #     SELECT {name_field},LIST(geom) geom
+    #     FROM(SELECT {name_field}, ST_FLIPCOORDINATES(ST_EXTENT(ST_TRANSFORM({geometry_column},'EPSG:25831','EPSG:4326'))) geom
+    #             FROM sel_table)
+    #     GROUP BY {name_field}''')
+    boxes_table=DUCKDB.sql(f'''
+            SELECT {name_field},LIST(geom) geom
+            FROM(SELECT {name_field}, ST_FLIPCOORDINATES(ST_EXTENT(ST_TRANSFORM({geometry_column},'EPSG:25831','EPSG:4326'))) geom
+                    FROM sel_table)
+            GROUP BY {name_field}''')
+    df=boxes_table.fetchdf().reset_index()
+    tile_names=df[name_field]
+    boxes=[list([list(j.values()) for j in i]) for i in df['geom']]
+    return tile_names, boxes
+
+def create_geojson_mass(table: duckdb.DuckDBPyRelation, name_field:str, output_directory:str, crs=25831, geometry_column ='geom'):
+    """Mass generation of GeoJSON files
+
+    Args:
+        table (duckdb.DuckDBPyRelation): Table containing the geometries and the tiles (original or virtual) they are associated with.
+        name_field (str): Name field containing the data for the element 
+        output_directory (str): Path to output directory.
+        crs (int, optional):
+        geometry_column (str, optional): Name of the geometry column. Defaults to 'geom'.
+
+    Returns:
+        _type_: _description_
+    """
+    sel_tab=table.select('*')
+
+    # TO RECOVER THE BBOXES AS A GEOMETRY
+    # sel_tab2=DUCKDB.sql(f'''SELECT {name_field},ST_ENVELOPE({geometry_column}) geom
+    #     FROM sel_tab
+    # ''')
+
+    sel_tab=DUCKDB.sql(f'''SELECT {name_field},{geometry_column} geom
+        FROM sel_tab
+    ''')
+    tiles_names=np.unique(sel_tab.fetchdf()[name_field])
+    files_names=[os.path.join(output_directory,os.path.splitext(os.path.basename(i))[0]) for i in tiles_names]
+
+    create_files_from_sql(tab=sel_tab,column=name_field,tile_names=tiles_names,file_names=files_names,crs=crs)
+    return tiles_names,files_names
+
+def create_level_dirs(results_dir, depth):
+    """Generates the directories for contained and limit dirs in a given pyramid level.
+
+    Args:
+        results_dir (str): Original dir in which all the layers are to be placed.
+        depth (int): The level of the pyramid to be built.
+
+    Returns:
+        contained_dir (str): Path to the dir to host the contained entities' GeoJSON files.
+        limit_dir (str):  Path to the dir to host the limit entities' GeoJSON files. 
+    """
+    level_dir=folder_check(os.path.join(results_dir,str(depth)))
+    contained_dir=folder_check(os.path.join(level_dir,'contained'))
+    limit_dir=folder_check(os.path.join(level_dir,'limit'))
+    return contained_dir,limit_dir
+
+def post_processing(depth: int,
+                    pyramid_dir: str,
+                    detections: duckdb.DuckDBPyRelation):
+    """Function to store in arrays files the detections into several different elements in order to find out what happened inside the process.
+
+    Args:
+        depth (int): The level of the pyramid to be built.
+        pyramid_dir (str): Path to the image pyramid
+        detections (duckdb.DuckDBPyRelation): Table with the polygon geometries to be used as box prompts
+        
+    Returns:
+        dict: Contains the names for the tiles and the arrays for the boxes
+    """
+    contained,limit=filter_level(detections,pyramid_dir,depth,'geom')
+    contained_tiles,contained_boxes=create_bboxes_sam(contained,'NAME')
+    limit_tiles,limit_boxes=create_bboxes_sam(limit,'MOSAIC')
+    return {depth:{'CONTAINED_TILES':contained_tiles,'CONTAINED_BOXES':contained_boxes,'LIMIT_TILES':limit_tiles,'LIMIT_BOXES':limit_boxes}}
+
+def post_processing_geojson(depth: int,
+                            pyramid_dir: str,
+                            detections: duckdb.DuckDBPyRelation,
+                            results_dir: str):
+    """Function to store in GeoJSON files the detections into several different elements in order to find out what happened inside the process.
+
+    Args:
+        depth (int): The level of the pyramid to be built.
+        pyramid_dir (str): Path to the image pyramid
+        detections (duckdb.DuckDBPyRelation): Table with the polygon geometries to be used as box prompts
+        results_dir (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    contained_dir,limit_dir=create_level_dirs(results_dir,depth)
+    contained,limit=filter_level(detections,pyramid_dir,depth,'geom')
+    contained_tiles,contained_boxes=create_geojson_mass(contained,'NAME',contained_dir)
+    limit_tiles,limit_boxes=create_geojson_mass(limit,'MOSAIC',limit_dir)
+    return {depth:{'CONTAINED_TILES':contained_tiles,'CONTAINED_BOXES':contained_boxes,'LIMIT_TILES':limit_tiles,'LIMIT_BOXES':limit_boxes}}
+
+def predict_tile(image_path,boxes,out_name):
+    """Apply SAM using BBOX.
+    Args:
+        image_path (str | np.array): Path to the tile or numpy array stemming from GDAL ReadAsArray(), or in this package tems, Ortophoto.raster.ReadAsArray()
+        boxes (Iterable | str [GeoJSON]): Nested list of bounds (X_min,Y_min,X_max,Y_max), or the path to a GeoJSON path containing Polygon geometries.          
+        out_name (str): Name for the output file, can be either vector (GeoJSON) or Raster (GeoTIFF)
+    """
+    if isinstance(boxes,str):
+        boxes+='.geojson'
+        if os.path.exists(boxes):
+            sam.set_image(image_path)
+            try:
+                sam.predict(boxes=boxes, output=out_name, dtype="uint8")
+                print('out')
+            except:
+                try: 
+                    sam.predict(boxes=boxes, output=out_name, dtype="uint8")
+                except:
+                    print(f'{out_name} could not be loaded')
+                    
+    elif isinstance(boxes,list) and isinstance(boxes[0],Iterable-[str]):
+        sam.set_image(image_path)
+        try:
+            sam.predict(boxes=boxes,point_crs='EPSG:4326', output=out_name, dtype="uint8")
+            print('out')
+        except:
+            try: 
+                sam.predict(boxes=boxes, point_crs="EPSG:4326", output=out_name, dtype="uint8")
+            except:
+                print(f'{out_name} could not be loaded')
+    else:
+        print('only GeoJSON or BOX POINT lists allowed')
+
+def create_sam_dirs(sam_out_dir,depth,contained_sam_out_images=[],limit_sam_out_images=[]):
+    """Generate the dirs for the batch SAM prediction and finds the available files to be found.    
+    Meant for recursion.
+
+    Args:
+        sam_out_dir (str): Path to the general dir in which the SAM predictions are desired
+        depth (int): Level of depth in the image pyramid desired
+        contained_sam_out_images (list, optional): Names of the images with prompts totally contained into the tiles. Defaults to [].
+        limit_sam_out_images (list, optional): Name of the images whose prompts are within several tiles and are thus saved in GDAL VRT virtual layers. Defaults to [].
+
+    Returns:
+        contained_sam_out_images, contained_sam_out_images: Returns new added file paths into original arrays. Meant for recursive use
+    """
+    level_sam_dir=folder_check(os.path.join(sam_out_dir,f'subset_{depth}'))
+    sam_contained_dir=folder_check(os.path.join(level_sam_dir,'contained'))
+    sam_limit_dir=folder_check(os.path.join(level_sam_dir,'limit'))
+
+    contained_sam_out_images.extend([os.path.join(sam_contained_dir,os.path.basename(i)) for i in results[depth].get('CONTAINED_TILES','NO')])
+    limit_sam_out_images.extend([os.path.join(sam_limit_dir,os.path.splitext(os.path.basename(i))[0]+'.tif') for i in results[depth].get('LIMIT_TILES','NO')])
+    return contained_sam_out_images,limit_sam_out_images
 
 if __name__=="__main__":
     #choose_model
@@ -141,75 +364,23 @@ if __name__=="__main__":
     t0=time.time()
     #gdf=gpd.read_file(os.path.join(OUT_DIR,'tanks_50c_40iou.geojson'))
     #gdf=prediction_to_bbox(gdf)
+    
     input_image=Tile(os.path.join(DATA_DIR,'ORTO_ZAL_BCN','ORTO_ZAL_BCN_pyramid','raster','subset_2','tile_4096_grid_0_2.tif'))
     results_dir=folder_check(os.path.join(input_image.folder,'intersection_results'))
-    
-    def create_bboxes_sam(table,name_field,crs=25831,geometry_column='geom'):
-        sel_table=table.select('*')
-        # boxes_table=DUCKDB.sql(f'''
-        #     SELECT {name_field},LIST(geom) geom
-        #     FROM(SELECT {name_field}, ST_FLIPCOORDINATES(ST_EXTENT(ST_TRANSFORM({geometry_column},'EPSG:25831','EPSG:4326'))) geom
-        #             FROM sel_table)
-        #     GROUP BY {name_field}''')
-        boxes_table=DUCKDB.sql(f'''
-             SELECT {name_field},LIST(geom) geom
-             FROM(SELECT {name_field}, ST_FLIPCOORDINATES(ST_EXTENT(ST_TRANSFORM({geometry_column},'EPSG:25831','EPSG:4326'))) geom
-                     FROM sel_table)
-             GROUP BY {name_field}''')
-        df=boxes_table.fetchdf().reset_index()
-        tile_names=df[name_field]
-        boxes=[list([list(j.values()) for j in i]) for i in df['geom']]
-        return tile_names, boxes
-    
-    def create_geojson_mass(table,name_field,output_directory,crs=25831,geometry_column='geom'):
-        sel_tab=table.select('*')
 
-        # TO RECOVER THE BBOXES AS A GEOMETRY
-        # sel_tab2=DUCKDB.sql(f'''SELECT {name_field},ST_ENVELOPE({geometry_column}) geom
-        #     FROM sel_tab
-        # ''')
-
-        sel_tab=DUCKDB.sql(f'''SELECT {name_field},{geometry_column} geom
-            FROM sel_tab
-        ''')
-        tiles_names=np.unique(sel_tab.fetchdf()[name_field])
-        files_names=[os.path.join(output_directory,os.path.splitext(os.path.basename(i))[0]) for i in tiles_names]
-
-        create_files_from_sql(tab=sel_tab,column=name_field,tile_names=tiles_names,file_names=files_names,crs=crs)
-        return tiles_names,files_names
-
-    def create_level_dirs(results_dir,depth):
-        level_dir=folder_check(os.path.join(results_dir,str(depth)))
-        contained_dir=folder_check(os.path.join(level_dir,'contained'))
-        limit_dir=folder_check(os.path.join(level_dir,'limit'))
-        return contained_dir,limit_dir
-        
-    def post_processing(depth,input_image,detections):
-        pyramid_dir=input_image.pyramid
-        contained,limit=filter_level(detections,pyramid_dir,depth,'geom')
-        contained_tiles,contained_boxes=create_bboxes_sam(contained,'NAME')
-        limit_tiles,limit_boxes=create_bboxes_sam(limit,'MOSAIC')
-        return {depth:{'CONTAINED_TILES':contained_tiles,'CONTAINED_BOXES':contained_boxes,'LIMIT_TILES':limit_tiles,'LIMIT_BOXES':limit_boxes}}
-    
-    def post_processing_geojson(depth,input_image,detections,results_dir):
-        pyramid_dir=input_image.pyramid
-        contained_dir,limit_dir=create_level_dirs(results_dir,depth)
-        contained,limit=filter_level(detections,pyramid_dir,depth,'geom')
-        contained_tiles,contained_boxes=create_geojson_mass(contained,'NAME',contained_dir)
-        limit_tiles,limit_boxes=create_geojson_mass(limit,'MOSAIC',limit_dir)
-        return {depth:{'CONTAINED_TILES':contained_tiles,'CONTAINED_BOXES':contained_boxes,'LIMIT_TILES':limit_tiles,'LIMIT_BOXES':limit_boxes}}
-    
     detections=read_file(os.path.join(OUT_DIR,'QGIS_BUILDINGS','ORIENTED_BOXES.GEOJSON'))
-    data_loaded_post_processing=partial(post_processing,input_image=input_image,detections=detections)
-    #data_loaded_geojson_post_processing=partial(post_processing_geojson,results_dir=results_dir,input_image=input_image,detections=detections)
+    data_loaded_post_processing=partial(post_processing,pyramid_dir=input_image.pyramid,detections=detections)
+    #data_loaded_geojson_post_processing=partial(post_processing_geojson,results_dir=results_dir,,pyramid_dir=input_image.pyramid,detections=detections)
     depths=[depth for depth in range(input_image.pyramid_depth)]
     
-    #with ProcessPoolExecutor() as Executor:
-    result=list(map(data_loaded_post_processing,depths))
+    t1=time.time()
+    with ProcessPoolExecutor(5) as Executor:
+        result=list(map(data_loaded_post_processing,depths))
         #geojson_result=list(map(data_loaded_geojson_post_processing,depths))
     results=dict(ChainMap(*result))
     #results=dict(ChainMap(*geojson_result))
     
+    t2=time.time()
     from itertools import chain
     
     contained_boxes=list(chain(*[results[i].get('CONTAINED_BOXES','NO') for i in results.keys()]))
@@ -217,59 +388,13 @@ if __name__=="__main__":
     limit_boxes=list(chain(*[results[i].get('LIMIT_BOXES','NO') for i in results.keys()]))
     limit_tiles=list(chain(*[results[i].get('LIMIT_TILES','NO') for i in results.keys()]))
     
-    #[contained_tiles,contained_boxes,limit_tiles,limit_boxes] =[[{level:results[level].get(element,'NO')} for level in results.keys()] for element in results.keys().mapping[0].keys()]
+    # [contained_tiles,contained_boxes,limit_tiles,limit_boxes] =[[{level:results[level].get(element,'NO')} for level in results.keys()] for element in results.keys().mapping[0].keys()]
     # contained_boxes=[{i:results[i].get('CONTAINED_BOXES','NO')} for i in results.keys()]
     # contained_tiles=[{i:results[i].get('CONTAINED_TILES','NO')} for i in results.keys()]
     # limit_boxes=[{i:results[i].get('LIMIT_BOXES','NO')} for i in results.keys()]
     # limit_tiles=[{i:results[i].get('LIMIT_TILES','NO')} for i in results.keys()]
 
-    
-    
-    def predict_tile(image_path,boxes,out_name):
-        """Apply SAM using BBOX.
-
-        Args:
-            image_path (str | np.array): Path to the tile or numpy array stemming from GDAL ReadAsArray(), or in this package tems, Ortophoto.raster.ReadAsArray()
-            boxes (Iterable [-str] |str [GeoJSON]): Nested list of bounds (X_min,Y_min,X_max,Y_max), or the path to a GeoJSON path containing Polygon geometries.          
-            out_name (str): Name for the output file, can be either vector (GeoJSON) or Raster (GeoTIFF)
-        """
-        if isinstance(boxes,str):
-            boxes+='.geojson'
-            if os.path.exists(boxes):
-                sam.set_image(image_path)
-                try:
-                    sam.predict(boxes=boxes, output=out_name, dtype="uint8")
-                    print('out')
-                except:
-                    try: 
-                        sam.predict(boxes=boxes, output=out_name, dtype="uint8")
-                    except:
-                        print(f'{out_name} could not be loaded')
-                        
-        elif isinstance(boxes,list):
-            sam.set_image(image_path)
-            try:
-                sam.predict(boxes=boxes,point_crs='EPSG:4326', output=out_name, dtype="uint8")
-                print('out')
-            except:
-                try: 
-                    sam.predict(boxes=boxes, point_crs="EPSG:4326", output=out_name, dtype="uint8")
-                except:
-                    print(f'{out_name} could not be loaded')
-        else:
-            print('only GeoJSON or BOX POINT lists allowed')
-
-    sam_out_dir=folder_check(os.path.join(input_image.folder,'sammed_images'))
-
-    def create_sam_dirs(sam_out_dir,depth,contained_sam_out_images=[],limit_sam_out_images=[]):
-        level_sam_dir=folder_check(os.path.join(sam_out_dir,f'subset_{depth}'))
-        sam_contained_dir=folder_check(os.path.join(level_sam_dir,'contained'))
-        sam_limit_dir=folder_check(os.path.join(level_sam_dir,'limit'))
-
-        contained_sam_out_images.extend([os.path.join(sam_contained_dir,os.path.basename(i)) for i in results[depth].get('CONTAINED_TILES','NO')])
-        limit_sam_out_images.extend([os.path.join(sam_limit_dir,os.path.splitext(os.path.basename(i))[0]+'.tif') for i in results[depth].get('LIMIT_TILES','NO')])
-        return contained_sam_out_images,limit_sam_out_images
-    
+    sam_out_dir=folder_check(os.path.join(input_image.folder,'sammed_images')) 
     contained_sam_out_images,limit_sam_out_images=[],[]
     for depth in list(reversed(depths)):
         contained_sam_out_images,limit_sam_out_images=create_sam_dirs(sam_out_dir,depth,contained_sam_out_images,limit_sam_out_images) 
@@ -280,15 +405,17 @@ if __name__=="__main__":
     #predict_tile(contained_tiles[0],contained_boxes[0],contained_sam_out_images[0])
     #predict_tile(limit_tiles[245],limit_boxes[245],limit_sam_out_images[245])
     #predict_tile(contained_tiles[183],contained_boxes[183],contained_sam_out_images[183])
+    
+    t3=time.time()
+    
+    print(f'''{t1-t0} INICIAL
+          {t2-t1} PREPARALELEO
+          {t3-t2} final''')
     list(map(predict_tile,contained_tiles,contained_boxes,contained_sam_out_images))
     list(map(predict_tile,limit_tiles,limit_boxes,limit_sam_out_images))
         
-    t1=time.time()
     #list(map(predict_tile,contained_tiles,contained_boxes,contained_sam_out_images))
-
-
     #predict_tile(limit_tiles[0],limit_boxes[0],limit_sam_out_images[0])
     #predict_tile(contained_tiles[100],contained_boxes[100],contained_sam_out_images[100])
 
-    print(f'{t1-t0}')
     pass    
