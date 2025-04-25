@@ -179,6 +179,10 @@ class Ortophoto():
         return self.mosaic_rasters(im_input,name=f'augmented_{self.basename}')
     
     def getSRS(self):
+        """Get the OSGEO/OSR WKT CRS 
+        Returns:
+            str: OSGEO/OSR Well-known Text (WKT) CRS 
+        """
         srs = osr.SpatialReference()
         srs.ImportFromEPSG(self.crs)
         dstSRS_wkt = srs.ExportToWkt()
@@ -195,6 +199,41 @@ class Ortophoto():
         '''Devuelve los ceros necesarios para la función zfill que permiten ordenar los números'''
         return int(log(num,10))+1
 
+    @property 
+    def pyramid(self):
+        if not hasattr(self,"pyramid"):
+            self.pyramid=self.create_pyramid(1024)
+            
+    def get_pyramid(self,lowest_pixel_size :int=1024):
+        """Gets the pyramid directory or creates it if not yet implemented
+
+        Args:
+            lowest_pixel_size (int, optional): Number of pixels for each tile in the pyramid. Defaults to 1024.
+        Returns:
+            str: Path to the pyramid
+        """
+        if not hasattr(self,"pyramid"):
+            self.pyramid=self.create_pyramid(lowest_pixel_size=lowest_pixel_size)
+        else:
+            return self.pyramid
+    
+    def get_pyramid_depth(self,lowest_pixel_size :int=1024):
+        """Calculates the depth of the image pyramid, creates it too if it hasn't been done yet
+
+        Args:
+            lowest_pixel_size (int, optional): Number of pixels for each tile in the pyramid. Defaults to 1024.
+
+        Returns:
+            int: Number of levels of the pyramid
+        """
+        if not hasattr(self,"pyramid_depth"):
+            self.pyramid=self.get_pyramid(lowest_pixel_size)
+            self.raster_pyramid=os.path.join(self.pyramid,'raster')
+            self.pyramid_depth=len([i  for i in os.listdir(self.raster_pyramid) if os.path.isfile(os.path.join(self.raster_pyramid,i))==False])
+            return self.pyramid_depth
+        else:
+            return self.pyramid_depth
+                        
     def tesselation(self,dir,step):
         metric_x=step*self.X_pixel
         metric_y=step*self.Y_pixel
@@ -335,26 +374,9 @@ class Ortophoto():
 
         with ProcessPoolExecutor() as executor:
                 results=list(executor.map(image_loaded_generalization,name_lists_flattened,xRes_flattened,yRes_flattened,bounds_lists_flattened))
-        t1=time()
-        # # print(f'i actually did it in {t1-t0}s')
-        # for layer in range(depth,-1,-1):
-        #     divisor=int(2**layer)
-        #     tile_size=largest_tile/divisor
 
-        #     directory=dirs[layer]
-        #     name_list,bound_list=self.tesselation(directory,tile_size)
-            
-        #     mult=2**(depth-layer)
-        #     xRes,yRes=self.X_pixel*mult,self.Y_pixel*mult
-        #     bound_gdf=gpd.GeoDataFrame({'NAME':name_list},geometry=gpd.GeoSeries.from_wkt([bounds2wkt(bound) for bound in bound_list]),crs=25831)
-        #     bound_gdf.to_file(os.path.join(pyramid_vector_dir,f'subset_{layer}.geojson'))
-        #     #self.explore(bound_list,tile_size)
-        #     generalize=partial(image_loaded_generalization,xRes=xRes,yRes=yRes)
 
-        #     with ProcessPoolExecutor() as executor:
-        #         results=list(executor.map(generalize,name_list,bound_list))
-
-        return None
+        return pyramid_dir
 
     def cloneBand(self,image,dst_filename,driver_name = None):
         """Creates a new raster file just like the current, given a matrix 
@@ -440,6 +462,11 @@ class Tile(Ortophoto):
     # def __ge__(self,t2):
     #     return self.pyramid_layer>t2.pyramid_layer
 
+    def get_pyramid(self):
+        return self.pyramid
+
+    def get_pyramid_depth(self):
+        return self.pyramid_depth
         
     def get_row_col(self,path=None):
         """Get the original size, row and col of a certain tile
