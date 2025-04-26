@@ -137,9 +137,10 @@ class SamGeo_apb(SamGeo):
             pass
         else:
             raise ValueError("Input image must be either a path or a numpy array.")
-
-        self.predictor.set_image(self.image, image_format=image_format)
-    
+        try:
+            self.predictor.set_image(self.image, image_format=image_format)
+        except torch.OutOfMemoryError:
+            pass
     def predict(
         self,
         point_coords=None,

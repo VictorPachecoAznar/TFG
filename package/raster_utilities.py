@@ -106,7 +106,9 @@ class Ortophoto():
         if folder is not None:
             return folder_check(folder)
         else:
-            return os.path.dirname(self.raster_path)
+            base=os.path.dirname(self.raster_path)
+            orto_dir=os.path.splitext(self.basename)[0]
+            return folder_check(os.path.join(base,orto_dir))
          
     # PICKLE FOR SERIALIZATION get and set state functions. 
     # These work by using a dict
@@ -199,10 +201,6 @@ class Ortophoto():
         '''Devuelve los ceros necesarios para la función zfill que permiten ordenar los números'''
         return int(log(num,10))+1
 
-    @property 
-    def pyramid(self):
-        if not hasattr(self,"pyramid"):
-            self.pyramid=self.create_pyramid(1024)
             
     def get_pyramid(self,lowest_pixel_size :int=1024):
         """Gets the pyramid directory or creates it if not yet implemented
@@ -214,6 +212,7 @@ class Ortophoto():
         """
         if not hasattr(self,"pyramid"):
             self.pyramid=self.create_pyramid(lowest_pixel_size=lowest_pixel_size)
+            return self.pyramid
         else:
             return self.pyramid
     
@@ -375,7 +374,6 @@ class Ortophoto():
         with ProcessPoolExecutor() as executor:
                 results=list(executor.map(image_loaded_generalization,name_lists_flattened,xRes_flattened,yRes_flattened,bounds_lists_flattened))
 
-
         return pyramid_dir
 
     def cloneBand(self,image,dst_filename,driver_name = None):
@@ -462,7 +460,7 @@ class Tile(Ortophoto):
     # def __ge__(self,t2):
     #     return self.pyramid_layer>t2.pyramid_layer
 
-    def get_pyramid(self):
+    def get_pyramid(self,lowest_pixel_size=1024):
         return self.pyramid
 
     def get_pyramid_depth(self):
