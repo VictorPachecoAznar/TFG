@@ -141,6 +141,7 @@ class SamGeo_apb(SamGeo):
             self.predictor.set_image(self.image, image_format=image_format)
         except torch.OutOfMemoryError:
             pass
+
     def predict(
         self,
         point_coords=None,
@@ -270,14 +271,24 @@ class SamGeo_apb(SamGeo):
         ):
             if isinstance(boxes, list) and isinstance(boxes[0], list):
                 boxes = boxes[0]
-            masks, scores, logits = predictor.predict(
-                point_coords,
-                point_labels,
-                np.array(input_boxes.cpu()),
-                mask_input,
-                multimask_output,
-                return_logits,
-            )
+            if isinstance(input_boxes,torch.Tensor):
+                masks, scores, logits = predictor.predict(
+                    point_coords,
+                    point_labels,
+                    np.array(input_boxes.cpu()),
+                    mask_input,
+                    multimask_output,
+                    return_logits,
+                )
+            else:
+                masks, scores, logits = predictor.predict(
+                    point_coords,
+                    point_labels,
+                    input_boxes,
+                    mask_input,
+                    multimask_output,
+                    return_logits,
+                )
         else:
             masks, scores, logits = predictor.predict_torch(
                 point_coords=point_coords,

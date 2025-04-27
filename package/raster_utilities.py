@@ -425,11 +425,14 @@ class Tile(Ortophoto):
         Args:   path (str): Complete path to the tile as a string
                 crs (int=25831): CRS of the tile to be loaded
         '''
-        super().__init__(path,None,crs)
+        super().__init__(path,
+                         os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(path)))),
+                         crs
+                         )
         self.original_size,self.row,self.col=self.get_row_col()
-        self.pyramid_layer=int(os.path.basename(self.folder).split('_')[1])
         self.pyramid=os.path.dirname(os.path.dirname(os.path.dirname(self.raster_path)))
         self.raster_pyramid=os.path.join(self.pyramid,'raster')
+        self.pyramid_layer=int(os.path.dirname(self.raster_path).split('_')[-1])
         self.pyramid_depth=len([i  for i in os.listdir(self.raster_pyramid) if os.path.isfile(os.path.join(self.raster_pyramid,i))==False])
         self.folder=os.path.dirname(self.pyramid)
         #self.children=self.get_children()
