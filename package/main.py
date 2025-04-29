@@ -115,12 +115,60 @@ def filter_level(detections,pyramid_dir,depths,geometry_column):
                GROUP BY w.predict_geom) t2
                ON t1.depth=t2.depth AND t1.predict_geom=t2.predict_geom
                 ''')
+    return contained
+    # DUCKDB.sql(
+    #     f'''SELECT t1.depth,t2.predict_geom geom,t1.NAME FROM within t1
+    #      JOIN
+    #         (SELECT MAX(depth) depth, w.predict_geom
+    #            FROM within w
+    #            GROUP BY w.predict_geom) t2
+    #            ON t1.depth=t2.depth AND t1.predict_geom=t2.predict_geom
+    #             ''')
     
-    limit=DUCKDB.sql('''SELECT predict_geom
+    limit=DUCKDB.sql('''SELECT NAME, predict_geom
                       FROM intersection
                       WHERE predict_geom 
                      NOT IN (SELECT geom FROM contained)
                       GROUP BY predict_geom''')
+    # DUCKDB.sql(
+    #     f'''JOIN (SELECT geom from contained) c
+        
+    #             ''')
+    # DUCKDB.sql(
+    #     f'''SELECT LIST(i3.NAME),i2.geom
+    #         FROM(SELECT MAX(depth), c.geom
+    #             FROM intersection i1
+    #             JOIN (SELECT geom from contained) c
+    #             ON c.geom=i1.predict_geom
+    #             GROUP BY c.geom) i2 join intersection i3
+    #             on i2.geom=i3.predict_geom and i2.depth=i3.depth
+    #             GROUP BY i2.geom
+    #             ''')
+    
+    # duckdb_2_gdf(DUCKDB.sql(
+    #     f'''SELECT LIST(i3.NAME) CONTAINED_ELEMENTS,i2.geom
+    #         FROM(SELECT MAX(depth) depth, c.geom
+    #             FROM intersection i1
+    #             JOIN (SELECT geom from contained) c
+    #             ON c.geom=i1.predict_geom
+    #             GROUP BY c.geom) i2 join intersection i3
+    #             on i2.geom=i3.predict_geom and i2.depth=i3.depth
+    #             WHERE ST_CONTAINS(i2.geom,i2.tile_geom)
+    #             GROUP BY i2.geom
+    #             '''),'geom').to_file(os.path.join(OUT_DIR,'prueba_teselas_limite_3.geojson'))
+
+    # duckdb_2_gdf(DUCKDB.sql(
+    #     f'''SELECT LIST(i3.NAME) CONTAINED_ELEMENTS,ST_COLLECT(LIST(ST_INTERSECTION(i3.predict_geom,i3.tile_geom))) geom, i3.predict_geom
+    #         FROM(SELECT MAX(depth) depth, c.geom
+    #             FROM intersection i1
+    #             JOIN (SELECT geom from contained) c
+    #             ON c.geom=i1.predict_geom
+    #             GROUP BY c.geom) i2 join intersection i3
+    #             on i2.geom=i3.predict_geom and i2.depth=i3.depth
+    #             WHERE NOT ST_CONTAINS(i3.predict_geom,i3.tile_geom)
+    #             GROUP BY i3.predict_geom,i3.tile_geom 
+                
+    #             '''),'geom').to_file(os.path.join(OUT_DIR,'prueba_teselas_limite_15.geojson'))
 
     if len(intersection)==0:
         raise Exception('THE PYRAMID DOES NOT CONTAIN THESE ELEMENTS')
@@ -254,15 +302,25 @@ def create_bboxes_sam(table: duckdb.DuckDBPyRelation,name_field: str,crs=25831,g
     tile_names, boxes=[],[]
     if table is not None:
         sel_table=table.select('*')
-        boxes_table=DUCKDB.sql(f'''
-                SELECT {name_field},LIST(geom) geom
-                FROM(SELECT {name_field}, ST_FLIPCOORDINATES(ST_EXTENT(ST_TRANSFORM({geometry_column},'EPSG:{crs}','EPSG:4326'))) geom
+        # boxes_table=DUCKDB.sql(f'''
+        #         SELECT {name_field},LIST(geom) geom
+        #         FROM(SELECT {name_field}, ST_FLIPCOORDINATES(ST_EXTENT(ST_TRANSFORM({geometry_column},'EPSG:{crs}','EPSG:4326'))) geom
+        #                 FROM sel_table)
+        #         GROUP BY {name_field}''')
+        boxes_table=DUCKDB.sql(f'''SELECT LIST({name_field}) AS {name_field}, LIST(geom) geom,depth
+                FROM(
+                SELECT {name_field},depth,LIST(geom) geom
+                FROM(SELECT {name_field},depth, ST_FLIPCOORDINATES(ST_EXTENT(ST_TRANSFORM({geometry_column},'EPSG:{crs}','EPSG:4326'))) geom
                         FROM sel_table)
-                GROUP BY {name_field}''')
+                GROUP BY {name_field},depth)
+                GROUP BY depth''')
         df=boxes_table.fetchdf().reset_index()
-        tile_names=list(df[name_field])
-        boxes=[list([list(j.values()) for j in i]) for i in df['geom']]
-    return tile_names, boxes
+        tile_names=df[name_field].tolist()
+        #boxes=[list([list(j.values()) for j in i]) for i in df['geom']]
+        boxes=[list([list([list(k.values()) for k in j]) for j in i]) for i in df['geom']]
+        depths=df['depth'].astype(np.uint8).tolist()
+        
+    return tile_names, boxes, depths
 
 def create_geojson_mass(table: duckdb.DuckDBPyRelation, name_field:str, output_directory:str, crs=25831, geometry_column ='geom'):
     """Mass generation of GeoJSON files
@@ -325,10 +383,10 @@ def post_processing(depths: Iterable[int],
     Returns:
         dict: Contains the names for the tiles and the arrays (minx,miny,maxx,maxy) for the boxes grouped by name of tile 
     """
-    contained,limit=filter_level(detections,pyramid_dir,depths,geometry_column)
-    contained_tiles,contained_boxes=create_bboxes_sam(contained,'NAME')
-    limit_tiles,limit_boxes=create_bboxes_sam(limit,'MOSAIC')
-    return {{depth:{'CONTAINED_TILES':contained_tiles,'CONTAINED_BOXES':contained_boxes,'LIMIT_TILES':limit_tiles,'LIMIT_BOXES':limit_boxes}}for depth in depths}
+    contained=filter_level(detections,pyramid_dir,depths,geometry_column)
+    contained_tiles,contained_boxes,depths=create_bboxes_sam(contained,'NAME')
+    #limit_tiles,limit_boxes=create_bboxes_sam(limit,'MOSAIC')
+    return [{depths[i]:{'CONTAINED_TILES':contained_tiles[i],'CONTAINED_BOXES':contained_boxes[i]}} for i in range(len(depths))]
 
 def post_processing_geojson(depth: int,
                             pyramid_dir: str,
@@ -417,30 +475,58 @@ def pyramid_sam_apply(image,prompt_file,lowest_pixel_size,geometry_column,sam):
     """
     input_image=Ortophoto(image)
     detections=read_file(prompt_file)
-    pyramid=input_image.get_pyramid(lowest_pixel_size)
-    data_loaded_post_processing=partial(post_processing,pyramid_dir=pyramid,detections=detections,geometry_column=geometry_column)
-    
+    pyramid=input_image.get_pyramid(lowest_pixel_size)    
     depths=[depth for depth in range(input_image.get_pyramid_depth())]
     
-    with ProcessPoolExecutor(5) as Executor:
-        result=list(map(data_loaded_post_processing,depths))
+    result=post_processing(pyramid_dir=pyramid,detections=detections,geometry_column=geometry_column,depths=depths)
     results=dict(ChainMap(*result))
+    
     from itertools import chain
+    
+    # contained_boxes=results.get('CONTAINED_BOXES','NO')
+    # contained_tiles=results.get('CONTAINED_TILES','NO')
     
     contained_boxes=list(chain(*[results[i].get('CONTAINED_BOXES','NO') for i in results.keys()]))
     contained_tiles=list(chain(*[results[i].get('CONTAINED_TILES','NO') for i in results.keys()]))
-    limit_boxes=list(chain(*[results[i].get('LIMIT_BOXES','NO') for i in results.keys()]))
-    limit_tiles=list(chain(*[results[i].get('LIMIT_TILES','NO') for i in results.keys()]))
+    
+    # limit_boxes=list(chain(*[results[i].get('LIMIT_BOXES','NO') for i in results.keys()]))
+    # limit_tiles=list(chain(*[results[i].get('LIMIT_TILES','NO') for i in results.keys()]))
 
-    sam_out_dir=folder_check(os.path.join(input_image.folder,'sammed_images')) 
+    sam_out_dir=folder_check(os.path.join(input_image.folder,'sammed_images_2')) 
     contained_sam_out_images,limit_sam_out_images=[],[]
 
     for depth in list(reversed(depths)):
         contained_sam_out_images,limit_sam_out_images=create_sam_dirs(sam_out_dir,results,depth,contained_sam_out_images,limit_sam_out_images) 
     sam_loaded_predict_tile=partial(predict_tile,sam=sam)
-    
+    #n=os.path.splitext(contained_sam_out_images[110])[0]+'_nombrado.geojson'
+    #sam.raster_to_vector(contained_sam_out_images[110],n)
     list(map(sam_loaded_predict_tile,contained_tiles,contained_boxes,contained_sam_out_images))
-    list(map(sam_loaded_predict_tile,limit_tiles,limit_boxes,limit_sam_out_images))
+    vectorize=partial(SamGeo_apb.raster_to_vector,dst_crs='epsg:4326')
+    new_geometries=np.array(list(map(vectorize,contained_sam_out_images)))
+    datos_wkt=pd.DataFrame({'wkt':new_geometries,'tiles':contained_sam_out_images})
+    refined_predictions=DUCKDB.sql('''SELECT ST_GEOMFROMTEXT(d.wkt) geom
+               from datos_wkt d''')
+    
+    DUCKDB.sql(
+        f''' SELECT t.NAME,
+                FROM tiles t
+                JOIN
+                (SELECT ST_GEOMFROMTEXT(*) geom
+                    FROM new_geometries) n
+               ''')
+    
+    boxes=DUCKDB.sql('''SELECT t1.NAME, st_collect(LIST(st_intersection(t1.tile_geom,t2.predict_geom))) geom, t2.depth
+              FROM unido t1
+                 JOIN (SELECT max(depth) depth,predict_geom FROM unido GROUP BY predict_geom) t2
+            on t1.depth=t2.depth and t1.predict_geom=t2.predict_geom
+            GROUP BY NAME,tile_geom,t2.depth''')
+    limit_tiles,limit_boxes,depths=create_bboxes_sam(boxes,'NAME')
+    
+    limit_result=[{depths[i]:{'LIMIT_TILES':limit_tiles[i],'LIMIT_BOXES':limit_boxes[i]}for i in range(len(depths))} ]
+    results=dict(ChainMap(*result))
+    limit_tiles=list(chain(*[results[i].get('LIMIT_BOXES','NO') for i in results.keys()]))
+    limit_boxes=list(chain(*[results[i].get('LIMIT_TILES','NO') for i in results.keys()]))
+    #list(map(sam_loaded_predict_tile,limit_tiles,limit_boxes,limit_sam_out_images))
     
 def pyramid_sam_apply_geojson(image,prompt_file,lowest_pixel_size,geometry_column,sam):
     
@@ -483,6 +569,9 @@ if __name__=="__main__":
        sam_kwargs=None,
        )
     
+    #forma=SamGeo_apb.raster_to_vector(r'C:\dev\TFG\data\ORTO_ZAL_BCN\sammed_images_2\subset_2\contained\tile_4096_grid_2_4.tif',
+    #                     r'C:\dev\TFG\data\ORTO_ZAL_BCN\sammed_images_2\subset_2\contained\tile_4096_grid_2_4_r.geojson')
+    #print(forma)
     t0=time.time()
     #gdf=gpd.read_file(os.path.join(OUT_DIR,'tanks_50c_40iou.geojson'))
     #gdf=prediction_to_bbox(gdf,crs)
@@ -491,23 +580,25 @@ if __name__=="__main__":
                                   #'ORTO_ZAL_BCN_pyramid','raster','subset_2','tile_4096_grid_0_2.tif'
                                   
     #results_dir=folder_check(os.path.join(input_image.folder,'intersection_results'))
-    grande=Tile('D:\\VICTOR_PACHECO\\CUARTO\\PROCESADO_IMAGEN\\data\\ORTO_ME_BCN\\ORTO_ME_BCN_pyramid\\raster\\subset_2\\tile_4096_grid_4_1.tif')
-    grande.get_children()
-    input_image=os.path.join(DATA_DIR,'ORTO_ME_BCN.tif')
+    #grande=Tile('D:\\VICTOR_PACHECO\\CUARTO\\PROCESADO_IMAGEN\\data\\ORTO_ME_BCN\\ORTO_ME_BCN_pyramid\\raster\\subset_2\\tile_4096_grid_4_1.tif')
+    #grande.get_children()
+    input_image=os.path.join(DATA_DIR,'ORTO_ZAL_BCN.tif')
+    
+    
+
 
     #    FAILED ATTEMPT AT USING PREVIOUS IMAGES AS PROMPTS
-    sam.set_image( os.path.join(DATA_DIR,"ORTO_ME_BCN","ORTO_ME_BCN_pyramid","raster","subset_2","tile_4096_grid_4_1.tif"))
-    sam.predict(
-       mask_input=np.array([cv2.resize(Ortophoto(os.path.join(DATA_DIR,"ORTO_ME_BCN","sammed_images","subset_2","contained","tile_4096_grid_4_1.tif")).raster.ReadAsArray(),
-                             (256,256),
-                             interpolation=cv2.INTER_LINEAR)]),
-       output='prueba_image_prompt.tif',
-       dtype="uint8"
-    )
-
-    #detections=read_file(os.path.join(OUT_DIR,'QGIS_BUILDINGS','ORIENTED_BOXES.GEOJSON'))
-    detections=os.path.join(OUT_DIR,'tanks_50c_40iou.geojson')
-    pyramid_sam_apply(input_image,detections,1024,'geom_1',sam)
+    # sam.set_image( os.path.join(DATA_DIR,"ORTO_ME_BCN","ORTO_ME_BCN_pyramid","raster","subset_2","tile_4096_grid_4_1.tif"))
+    # sam.predict(
+    #    mask_input=np.array([cv2.resize(Ortophoto(os.path.join(DATA_DIR,"ORTO_ME_BCN","sammed_images","subset_2","contained","tile_4096_grid_4_1.tif")).raster.ReadAsArray(),
+    #                          (256,256),
+    #                          interpolation=cv2.INTER_LINEAR)]),
+    #    output='prueba_image_prompt.tif',
+    #    dtype="uint8"
+    # 
+    detections=os.path.join(OUT_DIR,'QGIS_BUILDINGS','ORIENTED_BOXES.GEOJSON')
+    #detections=os.path.join(OUT_DIR,'tanks_50c_40iou.geojson')
+    pyramid_sam_apply(input_image,detections,1024,'geom',sam)
     
     #data_loaded_post_processing=partial(post_processing,pyramid_dir=input_image.pyramid,detections=detections)
     #data_loaded_geojson_post_processing=partial(post_processing_geojson,output_dir=results_dir,,pyramid_dir=input_image.pyramid,detections=detections)
@@ -545,7 +636,7 @@ if __name__=="__main__":
     #predict_tile(contained_tiles[0],contained_boxes[0],contained_sam_out_images[0])
     #predict_tile(limit_tiles[245],limit_boxes[245],limit_sam_out_images[245])
     #predict_tile(contained_tiles[183],contained_boxes[183],contained_sam_out_images[183])
-    
+
     # t3=time.time()
     
     # print(f'''{t1-t0} INICIAL
