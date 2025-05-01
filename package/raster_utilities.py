@@ -66,8 +66,8 @@ class Ortophoto():
 
     def __init__(self,path=None,folder=None,crs=25831):
         try:
-            if os.path.exists(path):
-                self.raster=gdal.Open(path)
+            #os.path.exists(path):
+            self.raster=gdal.Open(path)
         except:
             raise Exception('Name does not exist')
             

@@ -329,7 +329,7 @@ class SamGeo_apb(SamGeo):
 
             mask = band != 0
             shapes = features.shapes(band, mask=mask, transform=src.transform)
-
+            src.close()
         fc = [
             {"geometry": shapely.geometry.shape(shape), "properties": {"value": value}}
             for shape, value in shapes
