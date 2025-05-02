@@ -91,7 +91,7 @@ def filter_level(detections,pyramid_dir,depths,geometry_column):
     tiles=DUCKDB.sql(command)
 
     #tiles=read_file([os.path.join(pyramid_dir,'vector',f"subset_{depth}.geojson")for depth in depths])
-    DUCKDB
+
     detections=detections.select('*')
     #CONNECT PREDICTION TO TILE
     intersection=DUCKDB.sql(
@@ -528,6 +528,15 @@ def pyramid_sam_apply(image,prompt_file,lowest_pixel_size,geometry_column,sam):
                  JOIN (SELECT max(depth) depth,predict_geom FROM unido GROUP BY predict_geom) t2
             on t1.depth=t2.depth and t1.predict_geom=t2.predict_geom
             GROUP BY NAME,tile_geom,t2.depth''')
+    
+    boxes=DUCKDB.sql('''SELECT NAME,depth,st_collect(list(geom)) geom 
+                        FROM
+                        (SELECT t1.NAME,t1.tile_geom, st_intersection(t1.tile_geom,t2.predict_geom) geom, t2.depth
+                                FROM unido t1
+                            JOIN (SELECT max(depth) depth,predict_geom FROM unido GROUP BY predict_geom) t2
+                                on t1.depth=t2.depth and t1.predict_geom=t2.predict_geom)
+                        WHERE ST_AREA(geom)>1
+                    GROUP BY NAME,tile_geom,depth''')
     # Extents generationn to find the points
     name_field='NAME'
 
@@ -558,56 +567,19 @@ def pyramid_sam_apply(image,prompt_file,lowest_pixel_size,geometry_column,sam):
         DUCKDB.execute(f'''INSERT INTO resultado SELECT * geom FROM ST_GENERATEPOINTS({extents_list[i]}::BOX_2D,20)''')
     t1=time.time()
     print(f'{t1-t0}')
-    DUCKDB.sql('''SELECT b.NAME,LIST(r.geom) from resultado r join boxes b on st_intersects(ST_BUFFER(b.geom,-0.5),r.geom) GROUP BY b.NAME''')
-    
-    print(DUCKDB.sql('''SELECT b.NAME,LIST(r.geom)
-                        from resultado r 
-                            join(SELECT ST_BUFFER(geom,-0.5),NAME boxes) b
-                                on st_intersects(b.geom,r.geom) 
-                        GROUP BY b.NAME'''))
-    
-    print(DUCKDB.sql('''SELECT b.NAME,ST_COLLECT(LIST(r.geom::GEOMETRY))
-                        from resultado r 
-                            join(SELECT ST_BUFFER(geom,-0.5) geom,NAME FROM boxes) b
-                                on st_intersects(b.geom,r.geom) 
-                        GROUP BY b.NAME'''))    
-    
-    print(DUCKDB.sql(f'''SELECT b.NAME,ST_COLLECT(LIST(ST_FLIPCOORDINATES(ST_TRANSFORM(r.geom,'EPSG:{input_image.crs}','epsg:4326'))::GEOMETRY)) geom
-                        from resultado r 
-                            join(SELECT ST_BUFFER(geom,-0.5) geom,NAME FROM boxes) b
-                                on st_intersects(b.geom,r.geom) 
-                        GROUP BY b.NAME'''))
-    
-    DUCKDB.sql(f'''SELECT st_x(geom),st_y(geom) 
-                     from(SELECT b.NAME,ST_FLIPCOORDINATES(ST_TRANSFORM(r.geom,'EPSG:{input_image.crs}','epsg:4326'))::GEOMETRY)) geom
-                        from resultado r 
-                            join(SELECT ST_BUFFER(geom,-0.5) geom,NAME FROM boxes) b
-                                on st_intersects(b.geom,r.geom)) ''')
-    
-    puntos_interes=DUCKDB.sql(f'''SELECT NAME, LIST(st_x(geom)) X,LIST(st_y(geom)) Y
-                     from(SELECT b.NAME,ST_FLIPCOORDINATES(ST_TRANSFORM(r.geom,'EPSG:{input_image.crs}','epsg:4326')) geom
-                        from resultado r 
-                            join(SELECT ST_BUFFER(geom,-0.5) geom,NAME FROM boxes) b
-                                on st_intersects(b.geom,r.geom) AND ST_INTE)GROUP BY NAME ''').fetchdf()
-    
-    DUCKDB.sql(f'''SELECT NAME, LIST(st_x(geom)) X,LIST(st_y(geom)) Y, ST_COLLECT(LIST(geom::GEOMETRY)) geom
-                     from(SELECT b.NAME,ST_FLIPCOORDINATES(ST_TRANSFORM(r.geom,'EPSG:{input_image.crs}','epsg:4326')) geom
-                        from resultado r 
-                            join(select tile_geom from unido) u
-                            join(SELECT ST_BUFFER(geom,0.5) geom,NAME FROM boxes) b
-                                on st_intersects(r.geom,u.tile_geom) and not st_intersects(b.geom,r.geom))GROUP BY NAME ''')
-    DUCKDB.sql(f'''
-        SELECT positive.NAME, positive.X pos_X, positive.Y pos_Y, negative.X neg_X, negative.Y neg_Y, positive.geom
+
+    puntos_interes=DUCKDB.sql(f'''
+        SELECT positive.NAME, positive.X pos_X, positive.Y pos_Y, negative.X neg_X, negative.Y neg_Y
             FROM (SELECT NAME, LIST(st_x(geom)) X,LIST(st_y(geom)) Y, ST_COLLECT(LIST(geom::GEOMETRY)) geom
                     from(
-                        SELECT b.NAME,ST_FLIPCOORDINATES(ST_TRANSFORM(r.geom,'EPSG:{input_image.crs}','epsg:4326')) geom
+                        SELECT b.NAME,ST_FLIPCOORDINATES(ST_TRANSFORM(r.geom,'EPSG:{input_image.crs}','epsg:4326')) geom, 
                         from resultado r 
-                            join(SELECT ST_BUFFER(geom,-0.5) geom,NAME FROM boxes) b
+                            join(SELECT ST_BUFFER(geom,-0.5) geom,NAME, geom AS original_geom FROM boxes) b
                                 on st_intersects(b.geom,r.geom) )
                     GROUP BY NAME)positive 
             left join
             (SELECT NAME, LIST(st_x(geom)) X,LIST(st_y(geom)) Y, ST_COLLECT(LIST(geom::GEOMETRY)) geom
-                    FROM (SELECT r.geom,u.NAME 
+                    FROM (SELECT ST_FLIPCOORDINATES(ST_TRANSFORM(r.geom,'EPSG:{input_image.crs}','epsg:4326')) geom ,u.NAME 
                             from(select NAME,tile_geom from unido) u
                                 join(SELECT ST_BUFFER(geom,0.5) geom,NAME FROM boxes) b
                                     on u.NAME=b.NAME 
@@ -615,27 +587,47 @@ def pyramid_sam_apply(image,prompt_file,lowest_pixel_size,geometry_column,sam):
                                     ON st_intersects(r.geom,u.tile_geom) and not st_intersects(b.geom,r.geom) )
                 group by NAME) negative
             on positive.NAME=negative.NAME
-            ''')  
-    tile_names=puntos_interes['NAME']
-    point_prompt=[list(zip(*list(zip(puntos_interes['X'],puntos_interes['Y']))[i])) for i in range(len(puntos_interes))]
-    point_labels=puntos_interes['label']
-    # command = " UNION ALL ".join(
-    #     [f'''(SELECT * geom FROM ST_GENERATEPOINTS({extent}::BOX_2D,1000))'''for extent in extents_list])
+            ''')
     
-    # DUCKDB.execute(f"SET max_expression_depth TO {2*len(extents_list)+1}")                            
-    # DUCKDB.sql(command)
+    boxes_table=DUCKDB.sql(f'''
+                    SELECT {name_field},LIST(geom) geom
+                        FROM(
+                            SELECT {name_field}, depth, ST_FLIPCOORDINATES(ST_EXTENT(ST_TRANSFORM(t1.geom,'EPSG:{crs}','EPSG:4326'))) geom
+                                 FROM (
+                                 SELECT NAME,depth,unnest(ST_DUMP({geometry_column}),recursive:=true) geom
+                                    FROM boxes)t1)
+                GROUP BY {name_field}''')
+    crs=25831
+    boxes_table=DUCKDB.sql(f'''
+                    SELECT {name_field},LIST(geom) geom
+                        FROM(
+                            SELECT {name_field}, depth, ST_FLIPCOORDINATES(ST_EXTENT(ST_TRANSFORM(t1.geom,'EPSG:{crs}','EPSG:4326'))) geom
+                                 FROM (
+                                 SELECT NAME,depth,unnest(ST_DUMP({geometry_column}),recursive:=true) geom
+                                    FROM boxes) where st_area(t1.geom)>1 t1)
+                GROUP BY {name_field}''')
+    
+    out_prompts=DUCKDB.sql('''SELECT p.NAME, p.pos_x, p.pos_y,p.neg_X,p.neg_Y,b.geom
+                from puntos_interes p
+                join boxes_table b
+                on p.NAME=b.NAME''').fetchdf()
+    
 
+    list(map(sam_loaded_predict_tile,limit_tiles,limit_boxes,limit_sam_out_images))
 
-    limit_tiles,limit_boxes,depths=create_bboxes_sam(boxes,'NAME')
+    sam_out_dir=folder_check(os.path.join(input_image.folder,'sammed_images_new')) 
+    limit_tiles=[out_prompts['NAME'].to_list()]
+    point_prompt=[list(zip(*list(zip(out_prompts['pos_X'],out_prompts['pos_Y']))[i])) for i in range(len(out_prompts))]
+    limit_boxes=[list([list(j.values()) for j in i]) for i in out_prompts['geom']]
+    depths=[4]
+    depth=4
     limit_sam_out_images=[]
-    depth=depths[0]
-    DUCKDB.sql(f'''(SELECT * geom FROM ST_GENERATEPOINTS({extents_list[0]}::BOX_2D,1000))''')
     limit_result=[{depths[i]:{'LIMIT_TILES':limit_tiles[i],'LIMIT_BOXES':limit_boxes[i]}for i in range(len(depths))} ]
     results=dict(ChainMap(*limit_result))
+
+
     contained_sam_out_images,limit_sam_out_images=create_sam_dirs(sam_out_dir,results,depth,contained_sam_out_images,limit_sam_out_images) 
 
-    # limit_tiles=list(chain(*[results[i].get('LIMIT_BOXES','NO') for i in results.keys()]))
-    # limit_boxes=list(chain(*[results[i].get('LIMIT_TILES','NO') for i in results.keys()]))
     list(map(sam_loaded_predict_tile,limit_tiles,limit_boxes,limit_sam_out_images))
     
 def pyramid_sam_apply_geojson(image,prompt_file,lowest_pixel_size,geometry_column,sam):
