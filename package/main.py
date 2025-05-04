@@ -507,7 +507,7 @@ def pyramid_sam_apply(image,prompt_file,lowest_pixel_size,geometry_column,sam):
     """
     input_image=Ortophoto(image)
     detections=read_file(prompt_file)
-    #input_image.pyramid=folder_check(os.path.join(input_image.folder,os.path.basename(input_image.raster_path).split('.')[0])+'_pyramid')
+    input_image.pyramid=folder_check(os.path.join(input_image.folder,os.path.basename(input_image.raster_path).split('.')[0])+'_pyramid')
     pyramid=input_image.get_pyramid(lowest_pixel_size)    
     depths=[depth for depth in range(input_image.get_pyramid_depth())]
     
@@ -551,11 +551,12 @@ def pyramid_sam_apply(image,prompt_file,lowest_pixel_size,geometry_column,sam):
     
     boxes=DUCKDB.sql('''SELECT NAME,depth,st_collect(list(geom)) geom 
                         FROM
-                        (SELECT t1.NAME,t1.tile_geom, st_intersection(t1.tile_geom,t2.predict_geom) geom, t2.depth
+                        (SELECT NAME,tile_geom,geom,depth
+                        FROM (SELECT t1.NAME,t1.tile_geom, st_intersection(t1.tile_geom,t2.predict_geom) geom, t2.depth
                                 FROM unido t1
                             JOIN (SELECT max(depth) depth,predict_geom FROM unido GROUP BY predict_geom) t2
                                 on t1.depth=t2.depth and t1.predict_geom=t2.predict_geom)
-                        WHERE ST_AREA(geom)>1
+                        WHERE ST_AREA(geom)>1 and NOT ST_CONTAINS(geom,tile_geom))
                     GROUP BY NAME,tile_geom,depth''')
 
     name_field='NAME'
@@ -691,7 +692,24 @@ if __name__=="__main__":
        automatic=False,
        sam_kwargs=None,
        )
-    
+    # sam = SamGeo_apb(
+    #    model_type="vit_h",
+    #    automatic=False,
+    #    sam_kwargs={
+    #             'points_per_side': 32,
+    #             'points_per_batch': 32,
+    #             'pred_iou_thresh': 0.88,
+    #             'stability_score_thresh': 0.95,
+    #             'stability_score_offset': 1.0,
+    #             'box_nms_thresh': 0.7,
+    #             'crop_n_layers': 0,
+    #             'crop_nms_thresh': 0.7,
+    #             'crop_overlap_ratio': 512 / 1500,
+    #             'crop_n_points_downscale_factor': 1,
+    #             'point_grids':  None,
+    #             'min_mask_region_area': 0,
+    #             'output_mode': "binary_mask",}
+    #    )
     #forma=SamGeo_apb.raster_to_vector(r'C:\dev\TFG\data\ORTO_ZAL_BCN\sammed_images_2\subset_2\contained\tile_4096_grid_2_4.tif',
     #                     r'C:\dev\TFG\data\ORTO_ZAL_BCN\sammed_images_2\subset_2\contained\tile_4096_grid_2_4_r.geojson')
     #print(forma)
@@ -705,7 +723,7 @@ if __name__=="__main__":
     #results_dir=folder_check(os.path.join(input_image.folder,'intersection_results'))
     #grande=Tile('D:\\VICTOR_PACHECO\\CUARTO\\PROCESADO_IMAGEN\\data\\ORTO_ME_BCN\\ORTO_ME_BCN_pyramid\\raster\\subset_2\\tile_4096_grid_4_1.tif')
     #grande.get_children()
-    input_image=os.path.join(DATA_DIR,'ORTO_ME_BCN.tif')
+    input_image=os.path.join(DATA_DIR,'ORTO_ZAL_BCN.tif')
     
     
 
@@ -719,9 +737,9 @@ if __name__=="__main__":
     #    output='prueba_image_prompt.tif',
     #    dtype="uint8"
     # 
-    #detections=os.path.join(OUT_DIR,'QGIS_BUILDINGS','ORIENTED_BOXES.GEOJSON')
-    detections=os.path.join(OUT_DIR,'tanks_50c_40iou.geojson')
-    pyramid_sam_apply(input_image,detections,1024,'geom_1',sam)
+    detections=os.path.join(OUT_DIR,'QGIS_BUILDINGS','ORIENTED_BOXES.GEOJSON')
+    #detections=os.path.join(OUT_DIR,'tanks_50c_40iou.geojson')
+    pyramid_sam_apply(input_image,detections,1024,'geom',sam)
     
     #data_loaded_post_processing=partial(post_processing,pyramid_dir=input_image.pyramid,detections=detections)
     #data_loaded_geojson_post_processing=partial(post_processing_geojson,output_dir=results_dir,,pyramid_dir=input_image.pyramid,detections=detections)
