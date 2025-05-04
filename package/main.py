@@ -428,6 +428,7 @@ def predict_tile(image_path,boxes,out_name,sam):
         out_name (str): Name for the output file, can be either vector (GeoJSON) or Raster (GeoTIFF)
         sam (SamGeo_apb): SAM model instance to be used
     """
+
     if isinstance(boxes,str):
         boxes+='.geojson'
         if os.path.exists(boxes):
@@ -437,17 +438,42 @@ def predict_tile(image_path,boxes,out_name,sam):
                 return out_name
             except:
                 print(f'{out_name} could not be loaded')
+                            
+    elif isinstance(boxes,list) and isinstance(boxes[0],Iterable) and not isinstance(boxes[0],str) :
+        sam.set_image(image_path)
+        try:
+                sam.predict(boxes=boxes,point_crs='EPSG:4326', output=out_name, dtype="uint8")
+                print('out')
+                return out_name
+        except:
+                print(f'{out_name} could not be loaded')  
+    else:
+        print('only GeoJSON or BOX POINT lists allowed')
+
+def predict_tile_points(image_path,boxes,out_name,point_coords,point_labels,sam):
+   
+    if isinstance(boxes,str):
+        boxes+='.geojson'
+        if os.path.exists(boxes):
+            sam.set_image(image_path)
+            try:
+                sam.predict(point_coords=point_coords,point_labels=point_labels, output=out_name, dtype="uint8")
+                return out_name
+            except:
+                print(f'{out_name} could not be loaded')
+                
                     
     elif isinstance(boxes,list) and isinstance(boxes[0],Iterable) and not isinstance(boxes[0],str) :
         sam.set_image(image_path)
         try:
-            sam.predict(boxes=boxes,point_crs='EPSG:4326', output=out_name, dtype="uint8")
+            sam.predict(point_coords=point_coords,point_labels=point_labels,point_crs='EPSG:4326', output=out_name, dtype="uint8")
             print('out')
             return out_name
         except:
-                print(f'{out_name} could not be loaded')
+            print(f'{out_name} could not be loaded')
     else:
         print('only GeoJSON or BOX POINT lists allowed')
+ 
 
 def create_sam_dirs(sam_out_dir,results,depth,contained_sam_out_images=[],limit_sam_out_images=[]):
     """Generate the dirs for the batch SAM prediction and finds the available files to be found.    
@@ -481,7 +507,7 @@ def pyramid_sam_apply(image,prompt_file,lowest_pixel_size,geometry_column,sam):
     """
     input_image=Ortophoto(image)
     detections=read_file(prompt_file)
-    input_image.pyramid=folder_check(os.path.join(input_image.folder,os.path.basename(input_image.raster_path).split('.')[0])+'_pyramid')
+    #input_image.pyramid=folder_check(os.path.join(input_image.folder,os.path.basename(input_image.raster_path).split('.')[0])+'_pyramid')
     pyramid=input_image.get_pyramid(lowest_pixel_size)    
     depths=[depth for depth in range(input_image.get_pyramid_depth())]
     
@@ -516,18 +542,12 @@ def pyramid_sam_apply(image,prompt_file,lowest_pixel_size,geometry_column,sam):
                from datos_wkt d''')
         
     unido=DUCKDB.sql(
-            f'''SELECT t.NAME, t.depth,t.geom AS tile_geom, g.{geometry_column} AS predict_geom 
+            f'''SELECT t.NAME, t.depth,t.geom AS tile_geom, g.geom AS predict_geom 
                 FROM (SELECT parse_filename(NAME, false, 'system') as parsed_NAME, depth, geom, NAME
                     FROM tiles) t 
                 JOIN (SELECT parse_filename(tile_names, false, 'system') as parsed_tile_names, geom
                     FROM refined_predictions) g
-                    ON ST_INTERSECTS(t.geom,g.{geometry_column})''')
-        
-    boxes=DUCKDB.sql('''SELECT t1.NAME, st_collect(LIST(st_intersection(t1.tile_geom,t2.predict_geom))) geom, t2.depth
-              FROM unido t1
-                 JOIN (SELECT max(depth) depth,predict_geom FROM unido GROUP BY predict_geom) t2
-            on t1.depth=t2.depth and t1.predict_geom=t2.predict_geom
-            GROUP BY NAME,tile_geom,t2.depth''')
+                    ON ST_INTERSECTS(t.geom,g.geom)''')
     
     boxes=DUCKDB.sql('''SELECT NAME,depth,st_collect(list(geom)) geom 
                         FROM
@@ -537,34 +557,26 @@ def pyramid_sam_apply(image,prompt_file,lowest_pixel_size,geometry_column,sam):
                                 on t1.depth=t2.depth and t1.predict_geom=t2.predict_geom)
                         WHERE ST_AREA(geom)>1
                     GROUP BY NAME,tile_geom,depth''')
-    # Extents generationn to find the points
+
     name_field='NAME'
 
-    # Extents generationn to find the points
-    # extents=DUCKDB.sql(f'''SELECT {name_field}, depth, ST_FLIPCOORDINATES(ST_EXTENT(ST_TRANSFORM(t1.geom,'epsg:{crs}','epsg:4326'))) geom
-    #                 FROM (
-    #                     SELECT NAME,depth,unnest(ST_DUMP({geometry_column}),recursive:=true) geom
-    #                                 FROM boxes
-    #                                 )t1''')
-    extents=DUCKDB.sql(f'''SELECT ST_FLIPCOORDINATES(ST_EXTENT(ST_TRANSFORM(t1.geom,'epsg:{input_image.crs}','epsg:4326'))) geom
-                FROM (
-                    SELECT NAME,depth,unnest(ST_DUMP({geometry_column}),recursive:=true) geom
-                                FROM boxes
-                                )t1''')
     extents=DUCKDB.sql(f'''SELECT NAME,ST_EXTENT(t1.geom) geom
             FROM (
-                SELECT NAME,depth,unnest(ST_DUMP({geometry_column}),recursive:=true) geom
+                SELECT NAME,depth,unnest(ST_DUMP(geom),recursive:=true) geom
                             FROM boxes
                             )t1''')
     df=extents.fetchdf().reset_index()
     tile_names=df[name_field].tolist()
     extents_list=df['geom'].to_list()
     #box_prompts=list(zip(tile_names,extents_list))
+    tile_extents=DUCKDB.sql('''SELECT ST_EXTENT(geom) as box FROM tiles''').fetchdf()['box'].tolist()
 
-    DUCKDB.execute(f"CREATE TABLE resultado AS SELECT * geom FROM ST_GENERATEPOINTS({extents_list[0]}::BOX_2D,20)")
+    DUCKDB.execute(f"CREATE TABLE resultado AS SELECT * geom FROM ST_GENERATEPOINTS({extents_list[0]}::BOX_2D,1000)")
     t0=time.time()
     for i in range(1,len(extents_list)):
-        DUCKDB.execute(f'''INSERT INTO resultado SELECT * geom FROM ST_GENERATEPOINTS({extents_list[i]}::BOX_2D,20)''')
+        DUCKDB.execute(f'''INSERT INTO resultado SELECT * geom FROM ST_GENERATEPOINTS({extents_list[i]}::BOX_2D,1000)''')
+    for i in range(len(tile_extents)):
+        DUCKDB.execute(f'''INSERT INTO resultado SELECT * geom FROM ST_GENERATEPOINTS({tile_extents[i]}::BOX_2D,1000)''')
     t1=time.time()
     print(f'{t1-t0}')
 
@@ -577,7 +589,7 @@ def pyramid_sam_apply(image,prompt_file,lowest_pixel_size,geometry_column,sam):
                             join(SELECT ST_BUFFER(geom,-0.5) geom,NAME, geom AS original_geom FROM boxes) b
                                 on st_intersects(b.geom,r.geom) )
                     GROUP BY NAME)positive 
-            left join
+            join
             (SELECT NAME, LIST(st_x(geom)) X,LIST(st_y(geom)) Y, ST_COLLECT(LIST(geom::GEOMETRY)) geom
                     FROM (SELECT ST_FLIPCOORDINATES(ST_TRANSFORM(r.geom,'EPSG:{input_image.crs}','epsg:4326')) geom ,u.NAME 
                             from(select NAME,tile_geom from unido) u
@@ -589,22 +601,22 @@ def pyramid_sam_apply(image,prompt_file,lowest_pixel_size,geometry_column,sam):
             on positive.NAME=negative.NAME
             ''')
     
-    boxes_table=DUCKDB.sql(f'''
-                    SELECT {name_field},LIST(geom) geom
-                        FROM(
-                            SELECT {name_field}, depth, ST_FLIPCOORDINATES(ST_EXTENT(ST_TRANSFORM(t1.geom,'EPSG:{crs}','EPSG:4326'))) geom
-                                 FROM (
-                                 SELECT NAME,depth,unnest(ST_DUMP({geometry_column}),recursive:=true) geom
-                                    FROM boxes)t1)
-                GROUP BY {name_field}''')
+    # boxes_table=DUCKDB.sql(f'''
+    #                 SELECT {name_field},LIST(geom) geom
+    #                     FROM(
+    #                         SELECT {name_field}, depth, ST_FLIPCOORDINATES(ST_EXTENT(ST_TRANSFORM(t1.geom,'EPSG:{input_image.crs}','EPSG:4326'))) geom
+    #                              FROM (
+    #                              SELECT NAME,depth,unnest(ST_DUMP({geometry_column}),recursive:=true) geom
+    #                                 FROM boxes)t1)
+    #             GROUP BY {name_field}''')
     crs=25831
     boxes_table=DUCKDB.sql(f'''
                     SELECT {name_field},LIST(geom) geom
                         FROM(
                             SELECT {name_field}, depth, ST_FLIPCOORDINATES(ST_EXTENT(ST_TRANSFORM(t1.geom,'EPSG:{crs}','EPSG:4326'))) geom
                                  FROM (
-                                 SELECT NAME,depth,unnest(ST_DUMP({geometry_column}),recursive:=true) geom
-                                    FROM boxes) where st_area(t1.geom)>1 t1)
+                                 SELECT NAME,depth,unnest(ST_DUMP(geom),recursive:=true) geom
+                                    FROM boxes)t1 where st_area(t1.geom)>1)
                 GROUP BY {name_field}''')
     
     out_prompts=DUCKDB.sql('''SELECT p.NAME, p.pos_x, p.pos_y,p.neg_X,p.neg_Y,b.geom
@@ -613,11 +625,16 @@ def pyramid_sam_apply(image,prompt_file,lowest_pixel_size,geometry_column,sam):
                 on p.NAME=b.NAME''').fetchdf()
     
 
-    list(map(sam_loaded_predict_tile,limit_tiles,limit_boxes,limit_sam_out_images))
+    #list(map(sam_loaded_predict_tile,limit_tiles,limit_boxes,limit_sam_out_images))
 
-    sam_out_dir=folder_check(os.path.join(input_image.folder,'sammed_images_new')) 
+    sam_out_dir=folder_check(os.path.join(input_image.folder,'sammed_images_new_2')) 
     limit_tiles=[out_prompts['NAME'].to_list()]
-    point_prompt=[list(zip(*list(zip(out_prompts['pos_X'],out_prompts['pos_Y']))[i])) for i in range(len(out_prompts))]
+    positive_point_prompt=[list(zip(*list(zip(out_prompts['pos_X'],out_prompts['pos_Y']))[i])) for i in range(len(out_prompts))]
+    negative_point_prompt=[list(zip(*list(zip(out_prompts['neg_X'],out_prompts['neg_Y']))[i])) for i in range(len(out_prompts))]    
+    point_prompt=[positive_point_prompt[i]+negative_point_prompt[i] for i in range(len(out_prompts))]
+    point_labels=[[1 for j in range(len(positive_point_prompt[i]))]+[0 for j in range(len(negative_point_prompt[i]))]for i in range(len(out_prompts))]
+    #point_labels=[[1 for j in range(len(positive_point_prompt[i]))] for i in range(len(out_prompts))]
+
     limit_boxes=[list([list(j.values()) for j in i]) for i in out_prompts['geom']]
     depths=[4]
     depth=4
@@ -627,9 +644,13 @@ def pyramid_sam_apply(image,prompt_file,lowest_pixel_size,geometry_column,sam):
 
 
     contained_sam_out_images,limit_sam_out_images=create_sam_dirs(sam_out_dir,results,depth,contained_sam_out_images,limit_sam_out_images) 
+    sam_loaded_predict_tile_point=partial(predict_tile_points,sam=sam)
 
-    list(map(sam_loaded_predict_tile,limit_tiles,limit_boxes,limit_sam_out_images))
-    
+    # list(map(sam_loaded_predict_tile_point,limit_tiles[0],limit_boxes,limit_sam_out_images,point_prompt,point_labels))
+    list(map(sam_loaded_predict_tile_point,limit_tiles[0],limit_boxes,limit_sam_out_images,positive_point_prompt,point_labels))
+
+    list(map(sam_loaded_predict_tile,limit_tiles[0],limit_boxes,limit_sam_out_images))
+
 def pyramid_sam_apply_geojson(image,prompt_file,lowest_pixel_size,geometry_column,sam):
     
     input_image=Ortophoto(image)
@@ -684,7 +705,7 @@ if __name__=="__main__":
     #results_dir=folder_check(os.path.join(input_image.folder,'intersection_results'))
     #grande=Tile('D:\\VICTOR_PACHECO\\CUARTO\\PROCESADO_IMAGEN\\data\\ORTO_ME_BCN\\ORTO_ME_BCN_pyramid\\raster\\subset_2\\tile_4096_grid_4_1.tif')
     #grande.get_children()
-    input_image=os.path.join(DATA_DIR,'ORTO_ZAL_BCN.tif')
+    input_image=os.path.join(DATA_DIR,'ORTO_ME_BCN.tif')
     
     
 
@@ -698,9 +719,9 @@ if __name__=="__main__":
     #    output='prueba_image_prompt.tif',
     #    dtype="uint8"
     # 
-    detections=os.path.join(OUT_DIR,'QGIS_BUILDINGS','ORIENTED_BOXES.GEOJSON')
-    #detections=os.path.join(OUT_DIR,'tanks_50c_40iou.geojson')
-    pyramid_sam_apply(input_image,detections,1024,'geom',sam)
+    #detections=os.path.join(OUT_DIR,'QGIS_BUILDINGS','ORIENTED_BOXES.GEOJSON')
+    detections=os.path.join(OUT_DIR,'tanks_50c_40iou.geojson')
+    pyramid_sam_apply(input_image,detections,1024,'geom_1',sam)
     
     #data_loaded_post_processing=partial(post_processing,pyramid_dir=input_image.pyramid,detections=detections)
     #data_loaded_geojson_post_processing=partial(post_processing_geojson,output_dir=results_dir,,pyramid_dir=input_image.pyramid,detections=detections)
