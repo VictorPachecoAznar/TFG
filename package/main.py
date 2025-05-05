@@ -558,7 +558,21 @@ def pyramid_sam_apply(image,prompt_file,lowest_pixel_size,geometry_column,sam):
                                 on t1.depth=t2.depth and t1.predict_geom=t2.predict_geom)
                         WHERE ST_AREA(geom)>1 and NOT ST_CONTAINS(geom,tile_geom))
                     GROUP BY NAME,tile_geom,depth''')
+    
+    all_tiles=DUCKDB.sql('''SELECT t1.NAME,t1.tile_geom, st_intersection(t1.tile_geom,t2.predict_geom) geom, t2.depth
+                                FROM unido t1
+                            JOIN (SELECT max(depth) depth,predict_geom FROM unido GROUP BY predict_geom) t2
+                                on t1.depth=t2.depth and t1.predict_geom=t2.predict_geom)
+                        WHERE ST_AREA(geom)>1 ''')
+    
+    tiles_completas=DUCKDB.sql('''SELECT parse_filename(a.NAME, false, 'system') NAME
+                               from (SELECT DISTINCT NAME FROM all_tiles) a
+                               left join (SELECT NAME from boxes)b
+                               on a.NAME=b.NAME
+                               WHERE b.NAME IS NULL''')
 
+    path_to_complete=tiles_completas.fetchdf()['NAME']
+    
     name_field='NAME'
 
     extents=DUCKDB.sql(f'''SELECT NAME,ST_EXTENT(t1.geom) geom
@@ -651,6 +665,7 @@ def pyramid_sam_apply(image,prompt_file,lowest_pixel_size,geometry_column,sam):
     list(map(sam_loaded_predict_tile_point,limit_tiles[0],limit_boxes,limit_sam_out_images,positive_point_prompt,point_labels))
 
     list(map(sam_loaded_predict_tile,limit_tiles[0],limit_boxes,limit_sam_out_images))
+    
 
 def pyramid_sam_apply_geojson(image,prompt_file,lowest_pixel_size,geometry_column,sam):
     
