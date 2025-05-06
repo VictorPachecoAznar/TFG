@@ -98,7 +98,6 @@ def bbox_to_xy(
 
     return result
 
-            
 class SamGeo_apb(SamGeo):
     def __init__(self,
         model_type="vit_h",
@@ -350,3 +349,10 @@ class SamGeo_apb(SamGeo):
         
         n_gdf=gpd.tools.collect(gdf.geometry)
         return n_gdf.wkt
+
+    @staticmethod    
+    def full_to_tif(origin_tile,out_tile,multiplier=255):
+        origen=Ortophoto(origin_tile)
+        arr=np.full((origen.pixel_height,origen.pixel_width),multiplier)
+        origen.cloneBand(arr,origin_tile,out_tile)
+    

@@ -252,6 +252,8 @@ def filter_level(detections,pyramid_dir,depths,geometry_column):
 
     return exiters, final
     
+
+
 def create_file_from_sql(table,column,name,file_name,crs):
     """Creates a GeoJSON file from an SQL projection ("SELECT" operation into a column)
 
@@ -562,16 +564,16 @@ def pyramid_sam_apply(image,prompt_file,lowest_pixel_size,geometry_column,sam):
     all_tiles=DUCKDB.sql('''SELECT t1.NAME,t1.tile_geom, st_intersection(t1.tile_geom,t2.predict_geom) geom, t2.depth
                                 FROM unido t1
                             JOIN (SELECT max(depth) depth,predict_geom FROM unido GROUP BY predict_geom) t2
-                                on t1.depth=t2.depth and t1.predict_geom=t2.predict_geom)
+                                on t1.depth=t2.depth and t1.predict_geom=t2.predict_geom
                         WHERE ST_AREA(geom)>1 ''')
     
-    tiles_completas=DUCKDB.sql('''SELECT parse_filename(a.NAME, false, 'system') NAME
+    tiles_completas=DUCKDB.sql('''SELECT a.NAME
                                from (SELECT DISTINCT NAME FROM all_tiles) a
                                left join (SELECT NAME from boxes)b
                                on a.NAME=b.NAME
                                WHERE b.NAME IS NULL''')
 
-    path_to_complete=tiles_completas.fetchdf()['NAME']
+    paths_to_complete=tiles_completas.fetchdf()['NAME'].tolist()
     
     name_field='NAME'
 
@@ -580,6 +582,7 @@ def pyramid_sam_apply(image,prompt_file,lowest_pixel_size,geometry_column,sam):
                 SELECT NAME,depth,unnest(ST_DUMP(geom),recursive:=true) geom
                             FROM boxes
                             )t1''')
+
     df=extents.fetchdf().reset_index()
     tile_names=df[name_field].tolist()
     extents_list=df['geom'].to_list()
@@ -659,6 +662,13 @@ def pyramid_sam_apply(image,prompt_file,lowest_pixel_size,geometry_column,sam):
 
 
     contained_sam_out_images,limit_sam_out_images=create_sam_dirs(sam_out_dir,results,depth,contained_sam_out_images,limit_sam_out_images) 
+    level_sam_dir=folder_check(os.path.join(sam_out_dir,f'subset_{depth}'))
+    sam_limit_dir=os.path.join(level_sam_dir,'limit')
+
+    out_fulls=[os.path.join(sam_limit_dir,os.path.splitext(os.path.basename(p))[0]+'.tif') for p in paths_to_complete]
+    [SamGeo_apb.full_to_tif(i,j) for (i,j) in zip(paths_to_complete,out_fulls)]
+    contained_sam_out_images,limit_sam_out_images=create_sam_dirs(sam_out_dir,results,depth,contained_sam_out_images,limit_sam_out_images) 
+    
     sam_loaded_predict_tile_point=partial(predict_tile_points,sam=sam)
 
     # list(map(sam_loaded_predict_tile_point,limit_tiles[0],limit_boxes,limit_sam_out_images,point_prompt,point_labels))
