@@ -354,5 +354,5 @@ class SamGeo_apb(SamGeo):
     def full_to_tif(origin_tile,out_tile,multiplier=255):
         origen=Ortophoto(origin_tile)
         arr=np.full((origen.pixel_height,origen.pixel_width),multiplier)
-        origen.cloneBand(arr,origin_tile,out_tile)
+        origen.cloneBand(arr,out_tile)
     

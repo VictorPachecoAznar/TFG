@@ -395,7 +395,9 @@ class Ortophoto():
         ndvi_ds.SetProjection(self.dstSRS_wkt)
         ndvi_ds.GetRasterBand(1).WriteArray(image)
         ndvi_ds=None
+    
 
+    
     def find_intersection_centroid(self,gdf):
         """ Intersects an image and a gdf and returns intersection centroid
 

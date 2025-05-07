@@ -116,7 +116,85 @@ def filter_level(detections,pyramid_dir,depths,geometry_column):
                ON t1.depth=t2.depth AND t1.predict_geom=t2.predict_geom
                 ''')
     
-    return tiles, contained
+    limiting=DUCKDB.sql(
+        f'''SELECT t.NAME, t.depth,t.geom AS tile_geom, g.{geometry_column} AS predict_geom
+                FROM tiles t 
+                JOIN detections g
+                    ON ST_INTERSECTS(t.geom,g.{geometry_column}) AND NOT ST_CONTAINS(t.geom,g.{geometry_column})
+                    WHERE predict_geom NOT IN (SELECT distinct geom FROM contained)''')
+    
+    # DUCKDB.sql(
+    #     f'''SELECT l.NAME, l.depth,l.tile_geom, l.predict_geom
+    #         FROM(SELECT t.NAME, t.depth,t.geom AS tile_geom, g.{geometry_column} AS predict_geom
+    #             FROM tiles t 
+    #             JOIN detections g
+    #                 ON ST_INTERSECTS(t.geom,g.{geometry_column}) AND NOT ST_CONTAINS(t.geom,g.{geometry_column}))l
+                
+    #                 on c.geom=l.predict_geom and c.depth=c.depth''')
+    
+    affected=DUCKDB.sql(
+            f'''SELECT t1.affected_tiles, t1.depth, t1.geom
+                FROM (SELECT LIST(NAME) AS affected_tiles, count(depth),predict_geom as geom,depth
+                FROM limiting
+                    group by predict_geom,depth
+                    having count(NAME) =2) t1
+                    JOIN(
+                                    SELECT MAX(depth) depth,geom
+                                    FROM (SELECT count(NAME) AS affected_tiles, count(depth),predict_geom as geom,depth
+                                            FROM limiting
+                                            group by predict_geom,depth
+                                            having count(NAME) =2)
+                                    group by geom) t2
+                    on t1.depth=t2.depth and t1.geom=t2.geom
+                    ''')
+    
+    cleans=DUCKDB.sql(f'''SELECT DISTINCT affected_tiles AS unique_tiles
+                      FROM affected''')
+    final=None
+
+    if len(cleans)>0:
+        
+        #CREATES INDICES TO NAME THE ELEMENTS OF THE VIRTUAL LAYERS
+        cleans_indexed=DUCKDB.sql(f'''SELECT *,ROW_NUMBER() OVER (ORDER BY unique_tiles) AS row_index
+                            FROM cleans
+            ''')
+
+        combi=DUCKDB.sql(
+            """
+            SELECT *
+                FROM cleans_indexed c JOIN affected a
+                    ON c.unique_tiles=a.affected_tiles
+                            """)
+
+        relation_gdf=duckdb_2_gdf(combi,'geom',25831)
+
+        #fun=lambda x:[i for i in x]
+        array=[i for i in cleans_indexed['unique_tiles'].fetchnumpy()['unique_tiles']]
+        virtuals_dir=folder_check(os.path.join(os.path.dirname(pyramid_dir),'virtuals'))
+        names=[os.path.join(virtuals_dir,str(i)) for i in range(1,len(cleans_indexed)+1)]
+
+        with ProcessPoolExecutor(5) as Executor:
+            mosaics=list(Executor.map(Ortophoto.mosaic_rasters,array,names))
+
+        mosaic_index=[int(os.path.splitext(os.path.basename(i))[0]) for i in mosaics]
+
+        mosaics_data=[{'MOSAIC':i,'INDEX':j} for (i,j) in zip(mosaics,mosaic_index)]
+        mosaics_df=pd.DataFrame(mosaics_data)
+
+        final=DUCKDB.sql(f'''
+            SELECT m.MOSAIC,c.geom, c.affected_tiles,c.depth
+                FROM mosaics_df m JOIN 
+                    (SELECT u.row_index, a.geom, a.affected_tiles,depth
+                        FROM cleans_indexed u JOIN affected a 
+                            on a.affected_tiles=u.unique_tiles) c
+                ON m.INDEX=c.row_index''')
+        
+        new_contained=DUCKDB.sql('''SELECT NAME,depth, geom
+                                    FROM contained
+                                        UNION 
+                                    (SELECT MOSAIC, depth, geom FROM final)''')
+    return tiles, new_contained
+
     # DUCKDB.sql(
     #     f'''SELECT t1.depth,t2.predict_geom geom,t1.NAME FROM within t1
     #      JOIN
@@ -527,7 +605,7 @@ def pyramid_sam_apply(image,prompt_file,lowest_pixel_size,geometry_column,sam):
     # limit_boxes=list(chain(*[results[i].get('LIMIT_BOXES','NO') for i in results.keys()]))
     # limit_tiles=list(chain(*[results[i].get('LIMIT_TILES','NO') for i in results.keys()]))
 
-    sam_out_dir=folder_check(os.path.join(input_image.folder,'sammed_images_2')) 
+    sam_out_dir=folder_check(os.path.join(input_image.folder,'sammed_DEMO_ERNESTO')) 
     contained_sam_out_images,limit_sam_out_images=[],[]
 
     for depth in list(reversed(depths)):
@@ -645,7 +723,7 @@ def pyramid_sam_apply(image,prompt_file,lowest_pixel_size,geometry_column,sam):
 
     #list(map(sam_loaded_predict_tile,limit_tiles,limit_boxes,limit_sam_out_images))
 
-    sam_out_dir=folder_check(os.path.join(input_image.folder,'sammed_images_new_2')) 
+    sam_out_dir=folder_check(os.path.join(input_image.folder,'sammed_DEMO_ERNESTO')) 
     limit_tiles=[out_prompts['NAME'].to_list()]
     positive_point_prompt=[list(zip(*list(zip(out_prompts['pos_X'],out_prompts['pos_Y']))[i])) for i in range(len(out_prompts))]
     negative_point_prompt=[list(zip(*list(zip(out_prompts['neg_X'],out_prompts['neg_Y']))[i])) for i in range(len(out_prompts))]    
@@ -672,9 +750,9 @@ def pyramid_sam_apply(image,prompt_file,lowest_pixel_size,geometry_column,sam):
     sam_loaded_predict_tile_point=partial(predict_tile_points,sam=sam)
 
     # list(map(sam_loaded_predict_tile_point,limit_tiles[0],limit_boxes,limit_sam_out_images,point_prompt,point_labels))
-    list(map(sam_loaded_predict_tile_point,limit_tiles[0],limit_boxes,limit_sam_out_images,positive_point_prompt,point_labels))
+    list(map(sam_loaded_predict_tile_point,limit_tiles[0],limit_boxes,limit_sam_out_images,point_prompt,point_labels))
 
-    list(map(sam_loaded_predict_tile,limit_tiles[0],limit_boxes,limit_sam_out_images))
+    #list(map(sam_loaded_predict_tile,limit_tiles[0],limit_boxes,limit_sam_out_images))
     
 
 def pyramid_sam_apply_geojson(image,prompt_file,lowest_pixel_size,geometry_column,sam):
