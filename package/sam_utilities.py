@@ -187,6 +187,8 @@ class SamGeo_apb(SamGeo):
             return_results (bool, optional): Whether to return the predicted masks, scores, and logits. Defaults to False.
 
         """
+        if os.path.splitext(self.source)[1]=='.vrt':
+            print('manual')
         out_of_bounds = []
 
         if isinstance(boxes, str):
@@ -254,6 +256,7 @@ class SamGeo_apb(SamGeo):
                 input_boxes = input_boxes[None, :]
             else:
                 input_boxes = torch.tensor(input_boxes, device=self.device)
+                
                 input_boxes = predictor.transform.apply_boxes_torch(
                     input_boxes, self.image.shape[:2]
                 )

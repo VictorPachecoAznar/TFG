@@ -162,7 +162,7 @@ class Ortophoto():
             if not os.path.exists(name):
                 outdir=folder_check(os.path.join(DATA_DIR,os.path.dirname(name)))
             else:
-                outdir=name
+                outdir=os.path.dirname(root)
             outname=os.path.join(outdir,f'{os.path.basename(root)}{ext}')
             paths=" ".join(['"'+str(i)+'"' for i in valid_images])
             

@@ -94,6 +94,19 @@ def filter_level(detections,pyramid_dir,depths,geometry_column):
 
     detections=detections.select('*')
     #CONNECT PREDICTION TO TILE
+    extent_total=DUCKDB.sql('''
+        SELECT ST_EXTENT_AGG(geom) geom
+            from tiles t
+            group by depth
+                having depth=1''')
+    
+    detections=DUCKDB.sql('''
+        SELECT ST_INTERSECTION(d.geom,e.geom) AS geom
+            FROM detections d
+                JOIN extent_total e
+                on ST_intersects(d.geom,e.geom)''')
+
+
     intersection=DUCKDB.sql(
         f'''SELECT t.NAME, t.depth,t.geom AS tile_geom, g.{geometry_column} AS predict_geom
             FROM tiles t 
@@ -605,7 +618,7 @@ def pyramid_sam_apply(image,prompt_file,lowest_pixel_size,geometry_column,sam):
     # limit_boxes=list(chain(*[results[i].get('LIMIT_BOXES','NO') for i in results.keys()]))
     # limit_tiles=list(chain(*[results[i].get('LIMIT_TILES','NO') for i in results.keys()]))
 
-    sam_out_dir=folder_check(os.path.join(input_image.folder,'sammed_DEMO_ERNESTO')) 
+    sam_out_dir=folder_check(os.path.join(input_image.folder,'sammed_DEMO_ERNESTO_2')) 
     contained_sam_out_images,limit_sam_out_images=[],[]
 
     for depth in list(reversed(depths)):
@@ -723,7 +736,7 @@ def pyramid_sam_apply(image,prompt_file,lowest_pixel_size,geometry_column,sam):
 
     #list(map(sam_loaded_predict_tile,limit_tiles,limit_boxes,limit_sam_out_images))
 
-    sam_out_dir=folder_check(os.path.join(input_image.folder,'sammed_DEMO_ERNESTO')) 
+    sam_out_dir=folder_check(os.path.join(input_image.folder,'sammed_DEMO_ERNESTO_2')) 
     limit_tiles=[out_prompts['NAME'].to_list()]
     positive_point_prompt=[list(zip(*list(zip(out_prompts['pos_X'],out_prompts['pos_Y']))[i])) for i in range(len(out_prompts))]
     negative_point_prompt=[list(zip(*list(zip(out_prompts['neg_X'],out_prompts['neg_Y']))[i])) for i in range(len(out_prompts))]    
