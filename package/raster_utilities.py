@@ -123,7 +123,7 @@ class Ortophoto():
          self.raster = gdal.Open(self.raster_path)
     
     @staticmethod
-    def mosaic_rasters(im_input:Iterable,name:str,fetch=False):
+    def mosaic_rasters(im_input:Iterable,name:str,fetch=False, pixel_value_to_be_ignored=''):
         '''
         Returns the ortophoto object of the addition of the imput elements' iterable
         
@@ -166,10 +166,13 @@ class Ortophoto():
             outname=os.path.join(outdir,f'{os.path.basename(root)}{ext}')
             paths=" ".join(['"'+str(i)+'"' for i in valid_images])
             
+            if pixel_value_to_be_ignored!='':
+                pixel_value_to_be_ignored=f'-n {pixel_value_to_be_ignored}'
+
             if ext=='.vrt':
                 command=f'gdalbuildvrt -o "{outname}" {paths}'
             else:
-                command=f'gdal_merge -o "{outname}" {paths}'
+                command=f'gdal_merge {pixel_value_to_be_ignored} -o "{outname}" {paths}'
             subprocess.call(command)
             if fetch is True:
                 return Ortophoto(outname)

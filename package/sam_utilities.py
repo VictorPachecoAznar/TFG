@@ -5,98 +5,98 @@ from samgeo import *
 from samgeo.common import *
 # from package.sam_predictor_utilities import SamPredictorAPB
 
-def bbox_to_xy(
-    src_fp: str, coords: list, coord_crs: str = "epsg:4326", **kwargs
-) -> list:
-    """Converts a list of coordinates to pixel coordinates, i.e., (col, row) coordinates.
-        Note that map bbox coords is [minx, miny, maxx, maxy] from bottomleft to topright
-        While rasterio bbox coords is [minx, max, maxx, min] from topleft to bottomright
+# def bbox_to_xy(
+#     src_fp: str, coords: list, coord_crs: str = "epsg:4326", **kwargs
+# ) -> list:
+#     """Converts a list of coordinates to pixel coordinates, i.e., (col, row) coordinates.
+#         Note that map bbox coords is [minx, miny, maxx, maxy] from bottomleft to topright
+#         While rasterio bbox coords is [minx, max, maxx, min] from topleft to bottomright
 
-    Args:
-        src_fp (str): The source raster file path.
-        coords (list): A list of coordinates in the format of [[minx, miny, maxx, maxy], [minx, miny, maxx, maxy], ...]
-        coord_crs (str, optional): The coordinate CRS of the input coordinates. Defaults to "epsg:4326".
+#     Args:
+#         src_fp (str): The source raster file path.
+#         coords (list): A list of coordinates in the format of [[minx, miny, maxx, maxy], [minx, miny, maxx, maxy], ...]
+#         coord_crs (str, optional): The coordinate CRS of the input coordinates. Defaults to "epsg:4326".
 
-    Returns:
-        list: A list of pixel coordinates in the format of [[minx, maxy, maxx, miny], ...] from top left to bottom right.
-    """
+#     Returns:
+#         list: A list of pixel coordinates in the format of [[minx, maxy, maxx, miny], ...] from top left to bottom right.
+#     """
 
-    if isinstance(coords, str):
-        gdf = gpd.read_file(coords)
-        coords = gdf.geometry.bounds.values.tolist()
-        if gdf.crs is not None:
-            coord_crs = f"epsg:{gdf.crs.to_epsg()}"
-    elif isinstance(coords, np.ndarray):
-        coords = coords.tolist()
-    if isinstance(coords, dict):
-        import json
+#     if isinstance(coords, str):
+#         gdf = gpd.read_file(coords)
+#         coords = gdf.geometry.bounds.values.tolist()
+#         if gdf.crs is not None:
+#             coord_crs = f"epsg:{gdf.crs.to_epsg()}"
+#     elif isinstance(coords, np.ndarray):
+#         coords = coords.tolist()
+#     if isinstance(coords, dict):
+#         import json
 
-        geojson = json.dumps(coords)
-        gdf = gpd.read_file(geojson, driver="GeoJSON")
-        coords = gdf.geometry.bounds.values.tolist()
+#         geojson = json.dumps(coords)
+#         gdf = gpd.read_file(geojson, driver="GeoJSON")
+#         coords = gdf.geometry.bounds.values.tolist()
 
-    elif not isinstance(coords, list):
-        raise ValueError("coords must be a list of coordinates.")
+#     elif not isinstance(coords, list):
+#         raise ValueError("coords must be a list of coordinates.")
 
-    if not isinstance(coords[0], list):
-        coords = [coords]
+#     if not isinstance(coords[0], list):
+#         coords = [coords]
 
-    new_coords = []
+#     new_coords = []
 
-    with rasterio.open(src_fp) as src:
-        #transform=src.transform
-        #(x_step,min_width,y_step,max_height)=transform[0],transform[2],transform[4],transform[5]
-        #max_width = min_width+src.width*x_step
-        #min_height = max_height+src.height*y_step
-        min_width,min_height=0,0
-        max_width,max_height=src.width,src.height
-        for coord in coords:
-            minx, miny, maxx, maxy = coord
+#     with rasterio.open(src_fp) as src:
+#         #transform=src.transform
+#         #(x_step,min_width,y_step,max_height)=transform[0],transform[2],transform[4],transform[5]
+#         #max_width = min_width+src.width*x_step
+#         #min_height = max_height+src.height*y_step
+#         min_width,min_height=0,0
+#         max_width,max_height=src.width,src.height
+#         for coord in coords:
+#             minx, miny, maxx, maxy = coord
 
-            if coord_crs != src.crs:
-                minx, miny = transform_coords(minx, miny, coord_crs, src.crs, **kwargs)
-                maxx, maxy = transform_coords(maxx, maxy, coord_crs, src.crs, **kwargs)
+#             if coord_crs != src.crs:
+#                 minx, miny = transform_coords(minx, miny, coord_crs, src.crs, **kwargs)
+#                 maxx, maxy = transform_coords(maxx, maxy, coord_crs, src.crs, **kwargs)
 
-                rows1, cols1 = rasterio.transform.rowcol(
-                    src.transform, minx, miny, **kwargs
-                )
-                rows2, cols2 = rasterio.transform.rowcol(
-                    src.transform, maxx, maxy, **kwargs
-                )
+#                 rows1, cols1 = rasterio.transform.rowcol(
+#                     src.transform, minx, miny, **kwargs
+#                 )
+#                 rows2, cols2 = rasterio.transform.rowcol(
+#                     src.transform, maxx, maxy, **kwargs
+#                 )
 
-                new_coords.append([cols1, rows1, cols2, rows2])
+#                 new_coords.append([cols1, rows1, cols2, rows2])
 
-            else:
-                new_coords.append([minx, miny, maxx, maxy])
+#             else:
+#                 new_coords.append([minx, miny, maxx, maxy])
 
-    result = []
+#     result = []
 
-    for coord in new_coords:
-        minx, miny, maxx, maxy = coord
+#     for coord in new_coords:
+#         minx, maxy, maxx, miny = coord
 
-        if (
-            minx >= 0
-            and miny >= 0
-            and maxx >= 0
-            and maxy >= 0
-            and minx > min_width
-            and miny > min_height
-            and maxx < max_width
-            and maxy < max_height
-        ):
-            # Note that map bbox coords is [minx, miny, maxx, maxy] from bottomleft to topright
-            # While rasterio bbox coords is [minx, max, maxx, min] from topleft to bottomright
-            result.append([minx, maxy, maxx, miny])
+#         if (
+#             minx >= 0
+#             and miny >= 0
+#             and maxx >= 0
+#             and maxy >= 0
+#             and minx > min_width
+#             and miny > min_height
+#             and maxx < max_width
+#             and maxy < max_height
+#         ):
+#             # Note that map bbox coords is [minx, miny, maxx, maxy] from bottomleft to topright
+#             # While rasterio bbox coords is [minx, max, maxx, min] from topleft to bottomright
+#             result.append([minx, maxy, maxx, miny])
 
-    if len(result) == 0:
-        print("No valid pixel coordinates found.")
-        return None
-    elif len(result) == 1:
-        return result[0]
-    elif len(result) < len(coords):
-        print("Some coordinates are out of the image boundary.")
+#     if len(result) == 0:
+#         print("No valid pixel coordinates found.")
+#         return None
+#     elif len(result) == 1:
+#         return result[0]
+#     elif len(result) < len(coords):
+#         print("Some coordinates are out of the image boundary.")
 
-    return result
+#     return result
 
 class SamGeo_apb(SamGeo):
     def __init__(self,
