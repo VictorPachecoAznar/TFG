@@ -1,4 +1,4 @@
-name: clean_env_cuda
+name: clean_env_cuda2
 channels:
   - conda-forge
   - defaults

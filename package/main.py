@@ -11,7 +11,7 @@ from collections.abc import Iterable
 import cv2
 from package.sam_utilities import SamGeo_apb
 
-print(folder_check(TEMP_DIR))
+#print(folder_check(TEMP_DIR))
 
 def choose_model(name):
     #CREAR DATASET
