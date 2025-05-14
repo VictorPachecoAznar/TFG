@@ -4,9 +4,9 @@ channels:
 dependencies:
   - gdal=3.10.2
   - geopandas=1.0.1
-  - mamba=2.0.5
+  #- mamba=2.0.5
   - numpy=2.2.3
-  - py-opencv=4.11.0
+  # - py-opencv=4.11.0
   - pandas=2.2.3
   - python=3.12.9
   - shapely=2.0.7
