@@ -32,7 +32,7 @@ def prediction_to_bbox(gdf: gpd.GeoDataFrame, crs=25831):
     newgdf=gpd.GeoDataFrame(gdf,geometry=gpd.GeoSeries.from_wkt(wkts),crs=crs)
     return newgdf
 
-def read_file(paths,DUCKDB=DUCKDB):
+def read_file(paths,DUCKDB=DUCKDB,layer=None):
     """Geospatial data reader for DuckDB
 
     Args:
@@ -43,15 +43,35 @@ def read_file(paths,DUCKDB=DUCKDB):
         duckdb.DuckDBPyRelation: Table containing the elements
     """
     if isinstance(paths,str):
-        command=f'''SELECT *
-            FROM ST_READ('{paths}')'''
+        if layer is None:
+            command=f'''SELECT *
+                FROM ST_READ('{paths}')'''
+        elif isinstance(layer,str):
+            command=f'''SELECT *
+            FROM ST_READ('{paths}',layer="{layer}")'''
+            
     elif isinstance(paths,Iterable):
-        command = " UNION ALL ".join(
-            [f"SELECT *  FROM st_read('{path}')" for path in paths]
-                            )
+        if layer is None:
+            command = " UNION ALL ".join(
+                [f"SELECT *  FROM st_read('{path}')" for path in paths]
+                                )
+        elif isinstance(layer,str):
+            command = " UNION ALL ".join(
+                [f"SELECT *  FROM st_read('{path}',layer='{layer}')" for path in paths]
+                                )
+        elif isinstance(layer,Iterable):
+            command = " UNION ALL ".join(
+                [f"SELECT *  FROM st_read('{path}',layer='{single_layer}')" for (path,single_layer) in zip(paths,layer)]
+                                )
     else: 
         pass
-    return DUCKDB.sql(command)
+    
+    
+    no_geometry_column_db=DUCKDB.sql(command)
+    geometry_column=DUCKDB.sql(f'''SELECT column_name FROM (DESCRIBE no_geometry_column_db) WHERE column_type='GEOMETRY' ''').fetchdf()['column_name'][0]
+    geometry_column_db=DUCKDB.sql(f'''SELECT *,{geometry_column} AS geom from no_geometry_column_db''')
+    return geometry_column_db
+    
     
 def duckdb_2_gdf(tab: duckdb.DuckDBPyRelation,geometry_column,crs=25831):
     """Generates a GeoDataFrame from DuckDB

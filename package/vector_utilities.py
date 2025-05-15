@@ -11,6 +11,7 @@ from scipy.optimize import least_squares
 from package.main import prediction_to_bbox
 from concurrent.futures import ProcessPoolExecutor
 from math import isnan,sin,cos,pi,asin,sqrt
+from package.main import read_file
 
 def circle(x,px,py):
     return np.array((px-x[0])**2+(py-x[1])**2-x[2]**2)
@@ -52,8 +53,8 @@ def regress_circle(polygon:shapely.Polygon,threshold=0.001):
     
     pred_center=polygon.centroid
     np_exterior=np.array(polygon.boundary.coords)
-    if len(np_exterior)==4:
-        return polygon
+    # if len(np_exterior)==4:
+    #     return polygon
     
     x=np_exterior[:,0]
     y=np_exterior[:,1]
@@ -65,18 +66,17 @@ def regress_circle(polygon:shapely.Polygon,threshold=0.001):
     std=sqrt(float(np.matmul(np.transpose(v),v))/(v.shape[0]-len(f.x)))
     #/(v.shape[0]-len(f.x)))
     #print(std, v.shape[0])
-    if std>.05:
+    if std>sqrt(threshold)*r**2:
         #print(f'{counter,v.shape[0]}')
-        return polygon
-
+        return polygon,std,False
+    
     angles=np.linspace(0,2*pi,int(2*pi/asin(threshold/r)+1))
     
     x=np.full_like(angles,a)+np.sin(angles)*np.full_like(angles,r)
     y=np.full_like(angles,b)+np.cos(angles)*np.full_like(angles,r)
-    
     puntos_2=np.column_stack((x,y))
     polygon=shapely.Polygon(puntos_2)
-    return polygon
+    return polygon,std,True
 
 class VectorDataset():
     def __init__(self,path):
@@ -104,11 +104,59 @@ class VectorDataset():
             #curvas.append(geometry.GetCurveGeometry())
         return curvas
     
+    def regularize_circles_file(file,output:str=None,threshold: float = 0.01,file_gpkg_layer=None):
+        """Recovers a circular geometry as 
+
+        Args:
+            file (_type_): _description_
+            output (str, optional): _description_. Defaults to None.
+            threshold (float, optional): _description_. Defaults to 0.01.
+            file_gpkg_layer (_type_, optional): _description_. Defaults to None.
+
+        Raises:
+            Exception: _description_
+            Exception: _description_
+
+        Returns:
+            _type_: _description_
+        """
+
+        if isinstance(file,str):
+            if os.path.exists(file):
+                if file_gpkg_layer is not None:
+                    gdf=gpd.read_file(file,layer=file_gpkg_layer)
+                else:
+                    gdf=gpd.read_file(file)
+            else:
+                raise Exception('Path does not exist')
+            
+        elif isinstance(file,gpd.GeoDataFrame):
+            gdf=file.copy()
+    
+        else:
+            raise Exception('Only valid paths recognized by GeoPandas or GeoDataFrames accepted')
+                
+        convex_hull=gdf.geometry.convex_hull
+        polygons=gpd.GeoDataFrame([regress_circle(polygon,threshold) for polygon in convex_hull],
+                                  columns=['geom','std','regressed'],
+                                  geometry='geom',crs=gdf.crs)
+        #polygons['regressed']=polygons['std']<sqrt(threshold)
+        
+        if output is not None:
+            extension=os.path.splitext(output)[1]
+            if extension=='':
+                extension='.parquet'
+                output+=extension
+            if extension=='.parquet':
+                polygons.to_parquet(output)
+            else:
+                polygons.to_file(output)
+        else:
+            return polygons
+        
     def to_crs(self,dst_crs):
         pass
-    
-    #gdf
-    #least_squares(circle,,puntos)
+
             
     pass    
 

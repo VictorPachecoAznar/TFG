@@ -1,6 +1,6 @@
 from package.raster_utilities import Ortophoto
 from package import *
-from package.vector_utilities import regress_circle
+from package.vector_utilities import VectorDataset
 
 #shapely.Polygon.interpolate
 #import scipy.interpolate
@@ -21,33 +21,49 @@ if __name__=="__main__":
     #print(base_image.Y_pixel)
     #base_image.polygonize(1024)
     
-    diposits=gpd.read_file(os.path.join(DATA_DIR,'repo_gis.gpkg'),layer='diposit-perimetre_base')
+    #gdf=gpd.read_file(os.path.join(DATA_DIR,'repo_gis.gpkg'),layer='diposit-perimetre_base')
     #gdf=prediction_to_bbox(diposits)
+    
+    # VectorDataset.regularize_circles_file(file=os.path.join(DATA_DIR,'repo_gis.gpkg'),
+    #                                      output=os.path.join(TEMP_DIR,'resultado'),
+    #                                      file_gpkg_layer='diposit-perimetre_base')
+    
+    # VectorDataset.regularize_circles_file(
+    #     file=os.path.join(DATA_DIR,'ORTO_ME_BCN','first_iteration.geojson'),
+    #     output=os.path.join(TEMP_DIR,'FIRST_ITERATION')
+    #     )
+    gdf=gpd.read_parquet(os.path.join(DATA_DIR,'ORTO_ME_BCN','clean_second_iteration_buffer.parquet'))
 
-    exterior=[i.convex_hull for i in diposits['geometry']]
+    
+    simplegdf=gdf.explode()
+    polygon_gdf=simplegdf[simplegdf.geometry.type=='Polygon'].reset_index(drop=True)
+    VectorDataset.regularize_circles_file(
+        file=polygon_gdf,
+        output=os.path.join(TEMP_DIR,'COMBINED_ITERATIONS')
+        )
+    exterior=[i.convex_hull for i in gdf['geometry']]
 
     # np_exterior=np.array(exterior)
     # x=np_exterior[:,0]
     # y=np_exterior[:,1].flatten()
-    geometries=gpd.GeoDataFrame(geometry=exterior,crs=diposits.crs)
     
 
-    t0=time.time()
+    
+    # geometries=gpd.GeoDataFrame(geometry=exterior,crs=gdf.crs)
+    # t0=time.time()
+    # polygons=gpd.GeoSeries([regress_circle(polygon,0.01) for polygon in geometries.geometry])
+    # # partial_circle_regression=partial(regress_circle,threshold=0.01)
+    # rounded_p=gpd.GeoDataFrame(geometry=polygons,crs=gdf.crs)
 
-    polygons=gpd.GeoSeries([regress_circle(polygon,0.01) for polygon in geometries.geometry])
-
-    # partial_circle_regression=partial(regress_circle,threshold=0.01)
-    rounded_p=gpd.GeoDataFrame(geometry=polygons,crs=diposits.crs)
-
+    # # t1=time.time()
+    # # oriented_bboxes=prediction_to_bbox(rounded_p)
+    # # t2=time.time()
+    # # print(f'tiempo bbox{t2-t1}')   
+    # #rounded_p.to_file(os.path.join(BASE_DIR,'out','diposits_regressed.geojson'))
+    # rounded_p.to_parquet(os.path.join(BASE_DIR,'out','diposits_regressed.parquet'))
     # t1=time.time()
-    # oriented_bboxes=prediction_to_bbox(rounded_p)
-    # t2=time.time()
-    # print(f'tiempo bbox{t2-t1}')   
-    #rounded_p.to_file(os.path.join(BASE_DIR,'out','diposits_regressed.geojson'))
-    rounded_p.to_parquet(os.path.join(BASE_DIR,'out','diposits_regressed.parquet'))
-    t1=time.time()
     
-    print(f'tiempo{t1-t0}') #138S to 3s-numpy optimization
+    # print(f'tiempo{t1-t0}') #138S to 3s-numpy optimization
     # #rounded_p=gpd.GeoDataFrame(geometry=polygons,crs=gdf.crs)
     # DUCKDB.sql('''
     #     SELECT *
