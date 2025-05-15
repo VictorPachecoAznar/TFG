@@ -16,3 +16,4 @@ dependencies:
   - matplotlib=3.10.0
   - pyproj=3.7.1
   - scipy=1.15.2
+  - pyarrow=20.0.0
