@@ -6,6 +6,7 @@ from time import time
 from math import sqrt,log,pi,sin,cos,asin
 import geopandas as gpd, pandas as pd
 from collections.abc import Iterable
+import asyncio
 
 from package import *
 import numpy as np
@@ -36,9 +37,17 @@ def _warp_single_raster_shell(name,bounds,raster):
     gdal.Warp(name,raster.raster,options=options)
 
 def _simplify_single_raster(name,xRes,yRes,bounds,raster):
-    options= gdal.WarpOptions(dstSRS=raster.dstSRS_wkt,dstNodata=0,outputBounds=bounds,outputBoundsSRS=raster.dstSRS_wkt,multithread=True,xRes=xRes,yRes=yRes,resampleAlg='bilinear')
+    options= gdal.WarpOptions(dstSRS=raster.dstSRS_wkt,dstNodata=0,outputBounds=bounds,outputBoundsSRS=raster.dstSRS_wkt,
+                              multithread=True,
+                              xRes=xRes,yRes=yRes,resampleAlg='bilinear')
     gdal.Warp(name,raster.raster,options=options)
 
+def _async_simplify_single_raster(name,xRes,yRes,bounds,raster,dstSRS_wkt):
+    options= gdal.WarpOptions(dstSRS=dstSRS_wkt,dstNodata=0,outputBounds=bounds,outputBoundsSRS=dstSRS_wkt,
+                              multithread=True,
+                              xRes=xRes,yRes=yRes,resampleAlg='bilinear')
+    gdal.Warp(name,gdal.Open(raster),options=options)
+    
 def _generalize_single_raster(name,bounds,xRes,yRes,raster):
     options= gdal.WarpOptions(dstSRS=raster.dstSRS_wkt,dstNodata=0,outputBounds=bounds,outputBoundsSRS=raster.dstSRS_wkt,multithread=True,xRes=xRes,yRes=yRes,resampleAlg='bilinear')
     gdal.Warp(name,raster.raster,options=options)
@@ -373,9 +382,30 @@ class Ortophoto():
         [bound_gdf.to_file(os.path.join(pyramid_vector_dir,f'subset_{layer}.geojson')) for (bound_gdf,layer) in zip(bound_gdfs,layers)]
         name_lists_flattened=[t for tesela in teselas for t in tesela[0]]
         bounds_lists_flattened=[t for tesela in teselas for t in tesela[1]]
+        
+        # async def async_pyramid(names, xRes_list, yRes_list, bounds_list):
+        #     loop = asyncio.get_running_loop()
+        #     with ProcessPoolExecutor() as executor:
+        #         tasks = [
+        #             loop.run_in_executor(executor, _async_simplify_single_raster, name, xRes, yRes, bounds, self.raster_path,self.dstSRS_wkt)
+        #             for name, xRes, yRes, bounds in zip(names, xRes_list, yRes_list, bounds_list)
+        #         ]
+        #         return await asyncio.gather(*tasks)
+
+        # async def async_pyramid(names, xRes_list,yRes_list,bounds_list):
+        #     tasks = [
+        #     asyncio.to_thread( _async_simplify_single_raster, name, xRes, yRes, bounds, self.raster_path,self.dstSRS_wkt)
+        #     for name, xRes,yRes,bounds in zip(names, xRes_list,yRes_list,bounds_list)
+        #     ]
+        #     return await asyncio.gather(*tasks)
+
+        # asyncio.run(async_pyramid(name_lists_flattened,xRes_flattened,yRes_flattened,bounds_lists_flattened))
+
+
 
         with ProcessPoolExecutor() as executor:
                 results=list(executor.map(image_loaded_generalization,name_lists_flattened,xRes_flattened,yRes_flattened,bounds_lists_flattened))
+
 
         return pyramid_dir
 
