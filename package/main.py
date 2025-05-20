@@ -888,53 +888,5 @@ if __name__=="__main__":
     #detections=os.path.join(OUT_DIR,'tanks_50c_40iou.geojson')
     pyramid_sam_apply(input_image,detections,1024,'geom',0.5,sam)
     
-    #data_loaded_post_processing=partial(post_processing,pyramid_dir=input_image.pyramid,detections=detections)
-    #data_loaded_geojson_post_processing=partial(post_processing_geojson,output_dir=results_dir,,pyramid_dir=input_image.pyramid,detections=detections)
-    #depths=[depth for depth in range(input_image.pyramid_depth)]
-    
-    # t1=time.time()
-    # with ProcessPoolExecutor(5) as Executor:
-    #     result=list(map(data_loaded_post_processing,depths))
-    #     #geojson_result=list(map(data_loaded_geojson_post_processing,depths))
-    # results=dict(ChainMap(*result))
-    #results=dict(ChainMap(*geojson_result))
-    
-    # t2=time.time()
-    # from itertools import chain
-    
-    # contained_boxes=list(chain(*[results[i].get('CONTAINED_BOXES','NO') for i in results.keys()]))
-    # contained_tiles=list(chain(*[results[i].get('CONTAINED_TILES','NO') for i in results.keys()]))
-    # limit_boxes=list(chain(*[results[i].get('LIMIT_BOXES','NO') for i in results.keys()]))
-    # limit_tiles=list(chain(*[results[i].get('LIMIT_TILES','NO') for i in results.keys()]))
-    
-    # [contained_tiles,contained_boxes,limit_tiles,limit_boxes] =[[{level:results[level].get(element,'NO')} for level in results.keys()] for element in results.keys().mapping[0].keys()]
-    # contained_boxes=[{i:results[i].get('CONTAINED_BOXES','NO')} for i in results.keys()]
-    # contained_tiles=[{i:results[i].get('CONTAINED_TILES','NO')} for i in results.keys()]
-    # limit_boxes=[{i:results[i].get('LIMIT_BOXES','NO')} for i in results.keys()]
-    # limit_tiles=[{i:results[i].get('LIMIT_TILES','NO')} for i in results.keys()]
-
-    # sam_out_dir=folder_check(os.path.join(input_image.folder,'sammed_images')) 
-    # contained_sam_out_images,limit_sam_out_images=[],[]
-    # for depth in list(reversed(depths)):
-    #     contained_sam_out_images,limit_sam_out_images=create_sam_dirs(sam_out_dir,depth,contained_sam_out_images,limit_sam_out_images) 
-
-    #running
-    
-    #predict_tile(limit_tiles[0],limit_boxes[0],limit_sam_out_images[0])
-    #predict_tile(contained_tiles[0],contained_boxes[0],contained_sam_out_images[0])
-    #predict_tile(limit_tiles[245],limit_boxes[245],limit_sam_out_images[245])
-    #predict_tile(contained_tiles[183],contained_boxes[183],contained_sam_out_images[183])
-
-    # t3=time.time()
-    
-    # print(f'''{t1-t0} INICIAL
-    #       {t2-t1} PREPARALELEO
-    #       {t3-t2} final''')
-    # list(map(predict_tile,contained_tiles,contained_boxes,contained_sam_out_images))
-    # list(map(predict_tile,limit_tiles,limit_boxes,limit_sam_out_images))
-        
-    #list(map(predict_tile,contained_tiles,contained_boxes,contained_sam_out_images))
-    #predict_tile(limit_tiles[0],limit_boxes[0],limit_sam_out_images[0])
-    #predict_tile(contained_tiles[100],contained_boxes[100],contained_sam_out_images[100])
 
     pass    
