@@ -18,3 +18,4 @@ dependencies:
   - scipy=1.15.2
   - pytorch=*=cuda*
   - pyarrow=20.0.0
+  - openpyxl=3.1.5
