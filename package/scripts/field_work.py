@@ -23,7 +23,7 @@ def vector_deg_to_DMS(alpha):
 def quality_control_point_creation(from_crs=25831,geographic_crs=4258):
     """Data processing from the points with averaging
     """
-    df=pd.read_csv(os.path.join(DATA_DIR,'COMPROV ORTO.txt'),header=0,sep=' ')
+    df=pd.read_csv(os.path.join(DATA_DIR,'INFINITY_COMPROV_ORTO.txt'),header=0,sep=';')
     gdf=gpd.GeoDataFrame(df,geometry=gpd.points_from_xy(df['X'],df['Y']),crs=from_crs)
     
     projection=Proj(from_crs)
