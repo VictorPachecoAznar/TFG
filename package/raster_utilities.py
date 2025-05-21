@@ -244,6 +244,15 @@ class Ortophoto():
             return self.pyramid_depth
         else:
             return self.pyramid_depth
+    
+
+    def create_tiles_duckdb_table(self,lowest_pixel_size=1024):
+        """Generates a DUCKDB table named tiles, containing the image pyramid data and its information. May trigger pyramid_depth or pyramid calculation if not abailable.
+        """
+        command = " UNION ALL ".join(
+                [f"SELECT *, '{depth}' depth  FROM st_read('{os.path.join(self.get_pyramid(lowest_pixel_size),'vector',f"subset_{depth}.geojson")}')" for depth in self.get_pyramid_depth(lowest_pixel_size)])
+                                
+        DUCKDB.sql('CREATE TABLE IF NOT EXISTS tiles AS '+command)
                         
     def tesselation(self,dir,step):
         metric_x=step*self.X_pixel
