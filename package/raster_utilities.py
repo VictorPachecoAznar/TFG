@@ -1,16 +1,15 @@
+import tempfile
 from osgeo import gdal, osr
 import subprocess
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from time import time
 from math import sqrt,log,pi,sin,cos,asin
-import geopandas as gpd, pandas as pd
+import geopandas as gpd, pandas as pd, numpy as np
 from collections.abc import Iterable
 import asyncio
 
 from package import *
-import numpy as np
-#from fire import Fire
 
 
 def folder_check(dir):
@@ -173,16 +172,32 @@ class Ortophoto():
             else:
                 outdir=os.path.dirname(root)
             outname=os.path.join(outdir,f'{os.path.basename(root)}{ext}')
-            paths=" ".join(['"'+str(i)+'"' for i in valid_images])
-            
+
             if pixel_value_to_be_ignored!='':
-                pixel_value_to_be_ignored=f'-n {pixel_value_to_be_ignored}'
+                pixel_value_to_be_ignored=f'-srcnodata {pixel_value_to_be_ignored} -vrtnodata {pixel_value_to_be_ignored}'
+
+            def create_virtual_tiles(output_virtual_file_path):
+                """Generate a VRT file with the configurations to be added
+
+                Args:
+                    output_virtual_file_path (str): Path to the output VRT file
+                """
+                with tempfile.NamedTemporaryFile(mode='w',delete=False, suffix=".txt") as tmp:
+                    tiles_list_file = tmp.name
+                    for image_path in valid_images:
+                        tmp.write(image_path + '\n')
+                command = f'''gdalbuildvrt -o "{output_virtual_file_path}" {pixel_value_to_be_ignored} -input_file_list "{tiles_list_file}"'''
+                subprocess.call(command)
+                os.remove(tiles_list_file)
 
             if ext=='.vrt':
-                command=f'gdalbuildvrt -o "{outname}" {paths}'
+                create_virtual_tiles(outname)
             else:
-                command=f'gdal_merge {pixel_value_to_be_ignored} -o "{outname}" {paths}'
-            subprocess.call(command)
+                provisional_virtual_file=os.path.join(outdir,f'tmp.vrt')
+                create_virtual_tiles(provisional_virtual_file)
+                gdal.Translate(destName=outname,srcDS=provisional_virtual_file)
+                os.remove(provisional_virtual_file)
+            
             if fetch is True:
                 return Ortophoto(outname)
             else:
