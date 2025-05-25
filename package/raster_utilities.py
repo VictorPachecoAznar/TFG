@@ -255,17 +255,35 @@ class Ortophoto():
         if not hasattr(self,"pyramid_depth"):
             self.pyramid=self.get_pyramid(lowest_pixel_size)
             self.raster_pyramid=os.path.join(self.pyramid,'raster')
-            self.pyramid_depth=len([i  for i in os.listdir(self.raster_pyramid) if os.path.isfile(os.path.join(self.raster_pyramid,i))==False])
+            self.pyramid_depth=len([i for i in os.listdir(self.raster_pyramid) if os.path.isfile(os.path.join(self.raster_pyramid,i))==False])
             return self.pyramid_depth
         else:
             return self.pyramid_depth
     
+    def get_pyramid_tiles(self,lowest_pixel_size=1024):
+        """Fetches the list containing the paths for all files in the pyramid
+
+        Args:
+            lowest_pixel_size (int, optional): _description_. Defaults to 1024.
+
+        Returns:
+            list: Paths for the tiles in the pyramid
+        """
+        if not hasattr(self,'pyramid_tiles'):
+            pyramid_tiles=[]
+            for root, dirs, files in os.walk(os.path.join(self.get_pyramid(lowest_pixel_size),'raster')):
+                pyramid_tiles+=[os.path.join(root,name) for name in files if os.path.splitext(name)[1]=='.tif']
+            self.pyramid_tiles=pyramid_tiles
+
+        return self.pyramid_tiles
+
+
 
     def create_tiles_duckdb_table(self,lowest_pixel_size=1024):
         """Generates a DUCKDB table named tiles, containing the image pyramid data and its information. May trigger pyramid_depth or pyramid calculation if not abailable.
         """
         command = " UNION ALL ".join(
-                [f"SELECT *, '{depth}' depth  FROM st_read('{os.path.join(self.get_pyramid(lowest_pixel_size),'vector',f"subset_{depth}.geojson")}')" for depth in self.get_pyramid_depth(lowest_pixel_size)])
+                [f"SELECT *, '{depth}' depth  FROM st_read('{os.path.join(self.get_pyramid(lowest_pixel_size),'vector',f"subset_{depth}.geojson")}')" for depth in range(self.get_pyramid_depth(lowest_pixel_size))])
                                 
         DUCKDB.sql('CREATE TABLE IF NOT EXISTS tiles AS '+command)
                         
