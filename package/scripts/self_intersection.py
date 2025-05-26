@@ -50,7 +50,7 @@ def self_intersection(file):
         SELECT *,
             CASE 
                 WHEN GEOM_INTERSECTION = 0 THEN NULL 
-                ELSE GEOM_UNION/GEOM_INTERSECTION 
+                ELSE GEOM_INTERSECTION/GEOM_UNION 
             END AS result 
         FROM iou_gdf
         WHERE result IS NOT NULL
