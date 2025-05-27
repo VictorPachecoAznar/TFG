@@ -306,9 +306,11 @@ class Ortophoto():
                                 
         DUCKDB.sql('CREATE TABLE IF NOT EXISTS tiles AS '+command)
                         
-    def tesselation(self,dir,step):
-        metric_x=step*self.X_pixel
-        metric_y=step*self.Y_pixel
+    def tesselation(self,dir,step_x,step_y=None):
+        if step_y is None:
+            step_y=step_x
+        metric_x=step_x*self.X_pixel
+        metric_y=step_y*self.Y_pixel
 
         cols=abs(int(self.width/metric_x))
         rows=abs(int(self.height/metric_y))
@@ -317,10 +319,10 @@ class Ortophoto():
 
         name_list,bound_list=[],[]
         ncol,nrow=0,0
-        step=int(step)
+        step_x=int(step_x)
         for i in range(cols):
             for j in range(rows):
-                name=os.path.join(dir,f'tile_{step}_grid_{str(nrow).zfill(zrows)}_{str(ncol).zfill(zcols)}.tif')
+                name=os.path.join(dir,f'tile_{step_x}_grid_{str(nrow).zfill(zrows)}_{str(ncol).zfill(zcols)}.tif')
                 bounds=(self.X_min+metric_x*i,self.Y_max+metric_y*(j+1),self.X_min+metric_x*(i+1),self.Y_max+metric_y*j)
                 name_list.append(name)
                 bound_list.append(bounds) 
@@ -330,21 +332,26 @@ class Ortophoto():
         return name_list, bound_list
 
     
-    def polygonize(self,step,horizontal_skew=False,vertical_skew=False):
-    
+    def polygonize(self,step_x,step_y=None):
+        """Creates GDAL-based image cropping given an image size. Concurrently-sped up. 
+
+        Args:
+            step_x (int): The size of the resulting elements
+            horizontal_skew (int, optional): The pixel units to add from to step in the X direction (cols or i). Defaults to None.
+            vertical_skew (int, optional): The pixel units to add from to step in the Y direction (rows or j). Defaults to None.
+        """
         name_list=[]
         bound_list=[]
+
         # Generación de las ventanas para los recortes
+        tiles_dir=folder_check(os.path.join(self.folder,f'tiles_{os.path.basename(self.raster_path).split(".")[0]}_{step_x}'))
 
-        tiles_dir=folder_check(os.path.join(self.folder,f'tiles_{os.path.basename(self.raster_path).split(".")[0]}_{step}'))
-
-
-        name_list,bound_list=self.tesselation(tiles_dir,step)
+        name_list,bound_list=self.tesselation(tiles_dir,step_x,step_y)
     
         # Partial application of the function to avoid raster reopening
         processing=partial(_warp_single_raster,raster=self)
 
-        # PARALELIZADO CON MAP REDUCE
+        # PARALELIZADO CON PROCESOS CONCURRENTES
         with ProcessPoolExecutor() as executor:
              results = list(executor.map(processing,name_list,bound_list,chunksize=2000))
         
