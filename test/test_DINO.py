@@ -1,6 +1,8 @@
 import os
 from apb_spatial_computer_vision.lang_sam_utilities import LangSAM_apb
 from apb_spatial_computer_vision.raster_utilities import Ortophoto
+from apb_spatial_computer_vision import *
+from BETA.text_prompts import text_to_bbox_lowres_complete
 from functools import partial
 import time
 
@@ -19,22 +21,10 @@ class TestDINO(unittest.TestCase):
         cls.complete_image = Ortophoto(cls.path_orto)
 
     def test_text_prompt(self):
-       
-        tiles_to_check=self.complete_image.get_pyramid_tiles()
-        sam = LangSAM_apb()
-        predict_prompt=partial(sam.predict_dino,text_prompt=self.text_prompt,box_threshold=0.24, text_threshold=0.2)
-
-        def predict_save(image):
-            pil_image=sam.path_to_pil(image)
-            boxes,logits,phrases=predict_prompt(pil_image)
-            sam.boxes=boxes
-            print('out')
-            return sam.save_boxes(dst_crs=self.complete_image.crs)
-            
+        self.complete_image.pyramid=os.path.join(self.complete_image.folder,os.path.splitext(self.complete_image.basename)[0]+'_pyramid')
         t0=time.time()
-        gdf_list_bboxes_DINO=list(map(predict_save,tiles_to_check))
+        text_to_bbox_lowres_complete(self.complete_image,self.text_prompt)
         t1=time.time()
-        print(f'TIME SPENT DOING DINO {t1-t0}')
 
 if __name__ == '__main__':
     unittest.main()
