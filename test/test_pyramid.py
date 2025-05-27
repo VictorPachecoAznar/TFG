@@ -1,11 +1,11 @@
-import os,sys
+import os
 import time
 
 from apb_spatial_computer_vision.raster_utilities import Ortophoto
 from apb_spatial_computer_vision import *
-import shutil
-import matplotlib.pyplot as plt
 
+import matplotlib.pyplot as plt
+import tqdm
 import unittest
 
 class TestPyramid(unittest.TestCase):
@@ -22,7 +22,6 @@ class TestPyramid(unittest.TestCase):
     def test_create_ortophoto(self):
         self.assertTrue(os.path.exists(self.path_orto), f"Ortophoto file does not exist: {self.path_orto}")
         self.assertIsInstance(self.complete_image, Ortophoto, "Complete image should be an instance of Ortophoto")
-
 
     def test_create_pyramid(self):
         #         complete_image.create_gdal_parallelized_resolutions(5)
@@ -86,6 +85,8 @@ class TestPyramid(unittest.TestCase):
         self.complete_image.polygonize(1024)
         t1 = time.time()
         print(f'TIME OCURRED:{t1 - t0}')
+    
+
 
 
 if __name__ == '__main__':

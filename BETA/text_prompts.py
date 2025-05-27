@@ -11,99 +11,95 @@ import numpy as np
 import time
 from apb_spatial_computer_vision.main import duckdb_2_gdf
 
+
 text_prompt = "building"
 input_image_path=os.path.join(DATA_DIR,"ORTO_ZAL_BCN.tif")
 input_image=Ortophoto(input_image_path)
-input_image.pyramid=os.path.join(input_image.folder,'ORTO_ZAL_BCN_pyramid')
-tiles_to_check=input_image.get_pyramid_tiles()
 
-#image=os.path.join(DATA_DIR,'ORTO_ZAL_BCN','ORTO_ZAL_BCN_pyramid','raster','subset_0','tile_16384_grid_0_0.tif')
-sam = LangSAM_apb()
-# sam=LangSAM()
-predict_prompt=partial(sam.predict_dino,text_prompt=text_prompt,box_threshold=0.24, text_threshold=0.2)
-predict_prompt_old_way=partial(sam.predict,text_prompt=text_prompt,box_threshold=0.24, text_threshold=0.2)
+def text_to_bbox_dino(input_image,text_prompt):
+    input_image.pyramid=os.path.join(input_image.folder,'ORTO_ZAL_BCN_pyramid')
+    tiles_to_check=input_image.get_pyramid_tiles()
 
-def predict_save(image):
-    pil_image=sam.path_to_pil(image)
-    boxes,logits,phrases=predict_prompt(pil_image)
-    sam.boxes=boxes
-    print('out')
-    return sam.save_boxes(dst_crs=input_image.crs)
+    sam = LangSAM_apb()
+    predict_prompt=partial(sam.predict_dino,text_prompt=text_prompt,box_threshold=0.24, text_threshold=0.2)
 
-# def predict_save(image):
-#     predict_prompt_old_way(image)
-#     print('out')
-#     return sam.save_boxes(dst_crs=input_image.crs)
-    
-t0=time.time()
-gdf_list_bboxes_DINO=list(map(predict_save,tiles_to_check))
-t1=time.time()
-print(f'TIME SPENT DOING DINO {t1-t0}')
+    def predict_save(image):
+        pil_image=sam.path_to_pil(image)
+        boxes,logits,phrases=predict_prompt(pil_image)
+        sam.boxes=boxes
+        print('out')
+        return sam.save_boxes(dst_crs=input_image.crs)
 
-for i in range(len(tiles_to_check)):
-    gdf_list_bboxes_DINO[i]['NAME']=tiles_to_check[i]
+        
+    t0=time.time()
+    gdf_list_bboxes_DINO=list(map(predict_save,tiles_to_check))
+    t1=time.time()
+    print(f'TIME SPENT DOING DINO {t1-t0}')
 
-single_gdf_bboxes_DINO=pd.concat(gdf_list_bboxes_DINO)
-#single_gdf_bboxes_DINO.to_file(os.path.join(OUT_DIR,'groundedDINO','only_dino.geojson'))
-single_gdf_bboxes_DINO['geom']=single_gdf_bboxes_DINO.geometry.to_wkt()
-df_bounding_boxes_DINO=single_gdf_bboxes_DINO[['NAME','geom']]
+    for i in range(len(tiles_to_check)):
+        gdf_list_bboxes_DINO[i]['NAME']=tiles_to_check[i]
 
-input_image.create_tiles_duckdb_table()
+    single_gdf_bboxes_DINO=pd.concat(gdf_list_bboxes_DINO)
+    #single_gdf_bboxes_DINO.to_file(os.path.join(OUT_DIR,'groundedDINO','only_dino.geojson'))
+    single_gdf_bboxes_DINO['geom']=single_gdf_bboxes_DINO.geometry.to_wkt()
+    df_bounding_boxes_DINO=single_gdf_bboxes_DINO[['NAME','geom']]
 
-bounding_boxes_DINO=DUCKDB.sql('''
-    SELECT ST_GEOMFROMTEXT(geom) AS geom, NAME, CAST(parse_dirpath(name)[-1] AS INTEGER) depth
-        FROM df_bounding_boxes_DINO''')
+    input_image.create_tiles_duckdb_table()
+
+    bounding_boxes_DINO=DUCKDB.sql('''
+        SELECT ST_GEOMFROMTEXT(geom) AS geom, NAME, CAST(parse_dirpath(name)[-1] AS INTEGER) depth
+            FROM df_bounding_boxes_DINO''')
 
 
-non_complete_boxes=DUCKDB.sql('''
-SELECT b.geom,b.NAME,b.depth
-    from bounding_boxes_DINO b
-        JOIN
-    tiles AS t
-        ON t.NAME=b.NAME
-           where ST_area(b.geom)/st_area(t.geom)<0.8''')
+    non_complete_boxes=DUCKDB.sql('''
+    SELECT b.geom,b.NAME,b.depth
+        from bounding_boxes_DINO b
+            JOIN
+        tiles AS t
+            ON t.NAME=b.NAME
+            where ST_area(b.geom)/st_area(t.geom)<0.8''')
 
-duckdb_2_gdf(DUCKDB.sql(
-        '''
-        SELECT * FROM non_complete_boxes WHERE depth<2
-        '''),'geom').to_file(os.path.join(OUT_DIR,'groundedDINO','buildings_depth_0_1.geojson'))
+    duckdb_2_gdf(DUCKDB.sql(
+            '''
+            SELECT * FROM non_complete_boxes WHERE depth<2
+            '''),'geom').to_file(os.path.join(OUT_DIR,'groundedDINO','buildings_depth_0_1.geojson'))
 
-DUCKDB.sql('''
-    SELECT geom 
-        from bounding_boxes_DINO
-           GROUP BY name
-           ''')
+    DUCKDB.sql('''
+        SELECT geom 
+            from bounding_boxes_DINO
+            GROUP BY name
+            ''')
 
-repeated=DUCKDB.sql(
-        '''
-        SELECT b1.geom,b1.depth
-            FROM bounding_boxes_DINO b1
-                JOIN bounding_boxes_DINO b2
-                    ON ST_INTERSECTS(b1.geom,b2.geom) and not ST_CONTAINS(b2.geom,b1.geom)
-                        WHERE b1.geom!=b2.geom 
-                            GROUP BY b1.geom, b1.depth
-    ''')
-    
-
-iou_gdf=DUCKDB.sql(
-        '''
-        SELECT 
-                b1.geom,LIST(b2.geom)
-                SUM(ST_AREA(ST_UNION(b1.geom,b2.geom))) AS GEOM_UNION,
-                SUM(ST_AREA(ST_INTERSECTION(b1.geom,b2.geom))) AS GEOM_INTERSECTION, b1.depth
-                    FROM bounding_boxes_DINO b1 JOIN bounding_boxes_DINO b2
-                        ON ST_INTERSECTS(b1.geom,b2.geom)
-                            WHERE b1.geom!=b2.geom
+    repeated=DUCKDB.sql(
+            '''
+            SELECT b1.geom,b1.depth
+                FROM bounding_boxes_DINO b1
+                    JOIN bounding_boxes_DINO b2
+                        ON ST_INTERSECTS(b1.geom,b2.geom) and not ST_CONTAINS(b2.geom,b1.geom)
+                            WHERE b1.geom!=b2.geom 
                                 GROUP BY b1.geom, b1.depth
         ''')
-    
-final_iou_gdf=DUCKDB.sql(
-        '''
-        SELECT *,
-            CASE 
-                WHEN GEOM_INTERSECTION = 0 THEN NULL 
-                ELSE GEOM_UNION/GEOM_INTERSECTION 
-            END AS result 
-        FROM iou_gdf
-        WHERE result IS NOT NULL
-        ''')
+        
+
+    iou_gdf=DUCKDB.sql(
+            '''
+            SELECT 
+                    b1.geom,LIST(b2.geom)
+                    SUM(ST_AREA(ST_UNION(b1.geom,b2.geom))) AS GEOM_UNION,
+                    SUM(ST_AREA(ST_INTERSECTION(b1.geom,b2.geom))) AS GEOM_INTERSECTION, b1.depth
+                        FROM bounding_boxes_DINO b1 JOIN bounding_boxes_DINO b2
+                            ON ST_INTERSECTS(b1.geom,b2.geom)
+                                WHERE b1.geom!=b2.geom
+                                    GROUP BY b1.geom, b1.depth
+            ''')
+        
+    final_iou_gdf=DUCKDB.sql(
+            '''
+            SELECT *,
+                CASE 
+                    WHEN GEOM_INTERSECTION = 0 THEN NULL 
+                    ELSE GEOM_UNION/GEOM_INTERSECTION 
+                END AS result 
+            FROM iou_gdf
+            WHERE result IS NOT NULL
+            ''')
