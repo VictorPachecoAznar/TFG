@@ -7,7 +7,7 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 # Add the root directory to sys.path
 sys.path.append(root_dir)
 
-from package import *
+from apb_spatial_computer_vision import *
 
 import geopandas as gpd , pandas as pd, numpy as np
 from pyproj import Proj,Transformer,CRS

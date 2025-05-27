@@ -1,4 +1,4 @@
-from package import *
+from apb_spatial_computer_vision import *
 from osgeo import ogr,osr
 import numpy as np
 from scipy.optimize import least_squares
@@ -8,10 +8,10 @@ import geopandas as gpd
 import shapely
 from functools import partial
 from scipy.optimize import least_squares
-from package.main import prediction_to_bbox
+from apb_spatial_computer_vision.main import prediction_to_bbox
 from concurrent.futures import ProcessPoolExecutor
 from math import isnan,sin,cos,pi,asin,sqrt
-from package.main import read_file
+from apb_spatial_computer_vision.main import read_file
 
 def circle(x,px,py):
     return np.array((px-x[0])**2+(py-x[1])**2-x[2]**2)

@@ -492,3 +492,4 @@ py_deepness/tools/add_model_metadata.py
 py_deepness/tutorials/detection/Deploy_object_detection_model_with_Deepness_without_a_single_line_of_code.pdf
 py_deepness/tutorials/detection/cars_yolov7/car_detection__prepare_and_train.ipynb
 
+/test/data/

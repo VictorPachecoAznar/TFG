@@ -7,8 +7,8 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 # Add the root directory to sys.path
 sys.path.append(root_dir)
 
-from package.__init__ import BASE_DIR,DATA_DIR,OUT_DIR
-from package.raster_utilities import *
+from apb_spatial_computer_vision.__init__ import BASE_DIR,DATA_DIR,OUT_DIR
+from apb_spatial_computer_vision.raster_utilities import *
 
 
 def text_prompt():

@@ -7,9 +7,9 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 # Add the root directory to sys.path
 sys.path.append(root_dir)
 
-from package.raster_utilities import Tile
-from package.vector_utilities import VectorDataset,list_to_html
-from package.__init__ import DATA_DIR,BASE_DIR
+from apb_spatial_computer_vision.raster_utilities import Tile
+from apb_spatial_computer_vision.vector_utilities import VectorDataset,list_to_html
+from apb_spatial_computer_vision.__init__ import DATA_DIR,BASE_DIR
 
 import geopandas as gpd
 

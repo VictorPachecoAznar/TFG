@@ -1,6 +1,6 @@
-from package import *
-from package.main import *
-from package.raster_utilities import Ortophoto
+from apb_spatial_computer_vision import *
+from apb_spatial_computer_vision.main import *
+from apb_spatial_computer_vision.raster_utilities import Ortophoto
     
 def create_second_iteration(
     input_image: Ortophoto,

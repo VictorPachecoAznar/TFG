@@ -8,7 +8,7 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 # Add the root directory to sys.path
 sys.path.append(root_dir)
 
-from package.raster_utilities import *
+from apb_spatial_computer_vision.raster_utilities import *
 
 def text_prompt_to_json(tile,text_prompt,box_threshold=0.24,text_threshold=0.24):
     image=tile.raster_path

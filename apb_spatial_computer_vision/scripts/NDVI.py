@@ -7,8 +7,8 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 # Add the root directory to sys.path
 sys.path.append(root_dir)
 
-from package.raster_utilities import *
-from package import *
+from apb_spatial_computer_vision.raster_utilities import *
+from apb_spatial_computer_vision import *
 #import cv2 as cv
 import numpy as np
 

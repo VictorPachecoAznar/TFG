@@ -1,9 +1,9 @@
-from package import *
-from package.raster_utilities import Ortophoto,Tile,folder_check
+from apb_spatial_computer_vision import *
+from apb_spatial_computer_vision.raster_utilities import Ortophoto,Tile,folder_check
 import cv2, numpy as np
 from samgeo import *
 from samgeo.common import *
-# from package.sam_predictor_utilities import SamPredictorAPB
+# from apb_spatial_computer_vision.sam_predictor_utilities import SamPredictorAPB
 
 # def bbox_to_xy(
 #     src_fp: str, coords: list, coord_crs: str = "epsg:4326", **kwargs

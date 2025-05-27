@@ -1,5 +1,5 @@
-from package import *
-from package.raster_utilities import Ortophoto,Tile,folder_check
+from apb_spatial_computer_vision import *
+from apb_spatial_computer_vision.raster_utilities import Ortophoto,Tile,folder_check
 
 from concurrent.futures import ProcessPoolExecutor
 
@@ -9,7 +9,7 @@ from functools import partial
 from collections import ChainMap
 from collections.abc import Iterable
 import cv2
-from package.sam_utilities import SamGeo_apb
+from apb_spatial_computer_vision.sam_utilities import SamGeo_apb
 
 #print(folder_check(TEMP_DIR))
 
@@ -848,7 +848,7 @@ def create_second_iteration(
 if __name__=="__main__":
     #choose_model
     #model class has optimal resolution attribute
-    from package.sam_utilities import SamGeo_apb
+    from apb_spatial_computer_vision.sam_utilities import SamGeo_apb
     from samgeo.text_sam import LangSAM
     sam = LangSAM()
     # sam = SamGeo_apb(

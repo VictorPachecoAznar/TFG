@@ -5,7 +5,7 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 # Add the root directory to sys.path
 sys.path.append(root_dir)
-from package import *
+from apb_spatial_computer_vision import *
 import geopandas as gpd, numpy as np
 
 # gdf=gpd.read_file(os.path.join(OUT_DIR,'GOOGLE_COLLAB_GEOAI_BUILDINGS_AI','building_masks.geojson'))

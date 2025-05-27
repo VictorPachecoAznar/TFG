@@ -1,6 +1,6 @@
-from package import *
-from package.raster_utilities import Ortophoto
-from package.scripts.NDVI import safe_divide
+from apb_spatial_computer_vision import *
+from apb_spatial_computer_vision.raster_utilities import Ortophoto
+from apb_spatial_computer_vision.scripts.NDVI import safe_divide
 import numpy as np
 
 import cv2 as cv

@@ -1,5 +1,5 @@
-from package.main import read_file,duckdb_2_gdf
-from package import *
+from apb_spatial_computer_vision.main import read_file,duckdb_2_gdf
+from apb_spatial_computer_vision import *
 
 first_iteration=read_file(os.path.join(DATA_DIR,'ORTO_ME_BCN','first_iteration.geojson'))
 second_iteration=read_file(os.path.join(DATA_DIR,'ORTO_ME_BCN','second_iteration.geojson'))

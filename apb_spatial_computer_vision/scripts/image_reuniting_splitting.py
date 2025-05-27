@@ -1,6 +1,6 @@
-from package.raster_utilities import Ortophoto
-from package import *
-from package.vector_utilities import VectorDataset
+from apb_spatial_computer_vision.raster_utilities import Ortophoto
+from apb_spatial_computer_vision import *
+from apb_spatial_computer_vision.vector_utilities import VectorDataset
 
 #shapely.Polygon.interpolate
 #import scipy.interpolate

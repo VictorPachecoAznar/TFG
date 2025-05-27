@@ -1,7 +1,7 @@
 # from samgeo.text_sam import LangSAM
-from package.lang_sam_utilities import LangSAM_apb
-from package import *
-from package.raster_utilities import Ortophoto
+from apb_spatial_computer_vision.lang_sam_utilities import LangSAM_apb
+from apb_spatial_computer_vision import *
+from apb_spatial_computer_vision.raster_utilities import Ortophoto
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 import pandas as pd
@@ -9,7 +9,7 @@ from PIL import Image
 import rasterio 
 import numpy as np
 import time
-from package.main import duckdb_2_gdf
+from apb_spatial_computer_vision.main import duckdb_2_gdf
 
 text_prompt = "building"
 input_image_path="D:\VICTOR_PACHECO\CUARTO\PROCESADO_IMAGEN\data\ORTO_ZAL_BCN.tif"

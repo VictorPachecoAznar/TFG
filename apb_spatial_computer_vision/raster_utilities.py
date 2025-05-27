@@ -9,7 +9,7 @@ import geopandas as gpd, pandas as pd, numpy as np
 from collections.abc import Iterable
 import asyncio
 
-from package import *
+from apb_spatial_computer_vision import *
 
 
 def folder_check(dir):
@@ -94,7 +94,8 @@ class Ortophoto():
         self.crs=crs
         self.wkt=self._get_wkt()
         self.dstSRS_wkt=self.getSRS()
-        
+        self.pyramid = None
+
 
     def __repr__(self):
         ''''
@@ -237,7 +238,7 @@ class Ortophoto():
         Returns:
             str: Path to the pyramid
         """
-        if not hasattr(self,"pyramid"):
+        if self.pyramid is None:
             self.pyramid=self.create_pyramid(lowest_pixel_size=lowest_pixel_size)
             return self.pyramid
         else:
