@@ -95,7 +95,9 @@ class Ortophoto():
         self.wkt=self._get_wkt()
         self.dstSRS_wkt=self.getSRS()
         self.pyramid = None
-
+        self.resolutions =None
+        self.resolutions_tiles=None
+        self.lowest_pixel_size=1024
 
     def __repr__(self):
         ''''
@@ -230,7 +232,7 @@ class Ortophoto():
         return int(log(num,10))+1
 
             
-    def get_pyramid(self,lowest_pixel_size :int=1024):
+    def get_pyramid(self,lowest_pixel_size):
         """Gets the pyramid directory or creates it if not yet implemented
 
         Args:
@@ -239,7 +241,7 @@ class Ortophoto():
             str: Path to the pyramid
         """
         if self.pyramid is None:
-            self.pyramid=self.create_pyramid(lowest_pixel_size=lowest_pixel_size)
+            self.pyramid=self.create_pyramid(lowest_pixel_size=self.lowest_pixel_size)
             return self.pyramid
         else:
             return self.pyramid
@@ -278,6 +280,22 @@ class Ortophoto():
 
         return self.pyramid_tiles
 
+    def get_resolutions(self,depth=None):
+        if self.resolutions is None:
+            if depth is None:
+                depth=self.get_pyramid_depth()
+            self.resolutions=self.create_resolutions(depth)
+
+        return self.resolutions
+    
+    def get_resolution_tiles(self,depth=None):
+        if self.resolutions_tiles is None:
+            resolutions_tiles=[]
+            for root, dirs, files in os.walk(self.get_resolutions(depth)):
+                resolutions_tiles+=[os.path.join(root,name) for name in files if os.path.splitext(name)[1]=='.tif']
+            self.resolutions_tiles=resolutions_tiles
+
+        return self.resolutions_tiles
 
 
     def create_tiles_duckdb_table(self,lowest_pixel_size=1024):
@@ -361,7 +379,8 @@ class Ortophoto():
         df=pd.DataFrame(args)
         df=df.transpose()
         with ProcessPoolExecutor() as executor:
-                results=list(executor.map(gen,df['Name'],df['xRes'],df['yRes']))
+            results=list(executor.map(gen,df['Name'],df['xRes'],df['yRes']))
+        return resolutions_dir
 
     def create_non_parallelized_resolutions(self,depth):
         resolutions_dir=folder_check(os.path.join(self.folder,os.path.basename(self.raster_path).split('.')[0])+'_resolutions')
