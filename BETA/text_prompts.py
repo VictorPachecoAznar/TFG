@@ -12,12 +12,12 @@ import time
 from package.main import duckdb_2_gdf
 
 text_prompt = "building"
-input_image_path="D:\VICTOR_PACHECO\CUARTO\PROCESADO_IMAGEN\data\ORTO_ZAL_BCN.tif"
+input_image_path=os.path.join(DATA_DIR,"ORTO_ZAL_BCN.tif")
 input_image=Ortophoto(input_image_path)
 input_image.pyramid=os.path.join(input_image.folder,'ORTO_ZAL_BCN_pyramid')
 tiles_to_check=input_image.get_pyramid_tiles()
 
-image=os.path.join(DATA_DIR,'ORTO_ZAL_BCN','ORTO_ZAL_BCN_pyramid','raster','subset_0','tile_16384_grid_0_0.tif')
+#image=os.path.join(DATA_DIR,'ORTO_ZAL_BCN','ORTO_ZAL_BCN_pyramid','raster','subset_0','tile_16384_grid_0_0.tif')
 sam = LangSAM_apb()
 # sam=LangSAM()
 predict_prompt=partial(sam.predict_dino,text_prompt=text_prompt,box_threshold=0.24, text_threshold=0.2)
@@ -49,8 +49,6 @@ single_gdf_bboxes_DINO['geom']=single_gdf_bboxes_DINO.geometry.to_wkt()
 df_bounding_boxes_DINO=single_gdf_bboxes_DINO[['NAME','geom']]
 
 input_image.create_tiles_duckdb_table()
-
-
 
 bounding_boxes_DINO=DUCKDB.sql('''
     SELECT ST_GEOMFROMTEXT(geom) AS geom, NAME, CAST(parse_dirpath(name)[-1] AS INTEGER) depth
