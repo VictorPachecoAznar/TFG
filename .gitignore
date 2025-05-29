@@ -494,3 +494,5 @@ py_deepness/tutorials/detection/cars_yolov7/car_detection__prepare_and_train.ipy
 
 /test/data/
 .env
+data/ORTOFOTO_CHECK.dgn
+data/ORTOFOTO_CHECK.qmd
