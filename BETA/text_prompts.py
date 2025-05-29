@@ -12,9 +12,7 @@ import time
 from apb_spatial_computer_vision.main import duckdb_2_gdf
 
 
-text_prompt = "building"
-input_image_path=os.path.join(DATA_DIR,"ORTO_ZAL_BCN.tif")
-input_image=Ortophoto(input_image_path)
+
 
 def text_to_bbox_dino(input_image,text_prompt,output=None):
     tiles_to_check=input_image.get_pyramid_tiles()
@@ -205,3 +203,9 @@ def text_to_bbox_lowres_complete(
         duckdb_2_gdf(bboxes_duckdb).to_file(output)
     
     return bboxes_duckdb
+
+
+if __name__=='__main__':
+    text_prompt = "building"
+    input_image_path=os.path.join(DATA_DIR,"ORTO_ZAL_BCN.tif")
+    input_image=Ortophoto(input_image_path)
