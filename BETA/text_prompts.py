@@ -189,8 +189,6 @@ def text_to_bbox_lowres_complete(
     #single_gdf_bboxes_DINO.to_file(os.path.join(OUT_DIR,'groundedDINO','only_dino.geojson'))
     single_gdf_bboxes_DINO['geom']=single_gdf_bboxes_DINO.geometry.to_wkt()
     df_bounding_boxes_DINO=single_gdf_bboxes_DINO[['NAME','geom']]
-
-    input_image.create_tiles_duckdb_table()
     bounding_boxes_DINO=DUCKDB.sql('''
         SELECT ST_GEOMFROMTEXT(geom) AS geom, NAME
             FROM df_bounding_boxes_DINO''')
