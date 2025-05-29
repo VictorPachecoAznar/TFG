@@ -192,15 +192,14 @@ def text_to_bbox_lowres_complete(
 
     input_image.create_tiles_duckdb_table()
     bounding_boxes_DINO=DUCKDB.sql('''
-        SELECT ST_GEOMFROMTEXT(geom) AS geom, NAME, CAST(parse_dirpath(name)[-1] AS INTEGER) depth
+        SELECT ST_GEOMFROMTEXT(geom) AS geom, NAME
             FROM df_bounding_boxes_DINO''')
     
     bboxes_duckdb=DUCKDB.sql('''
-        SELECT b.geom,b.NAME,b.depth
-            from bounding_boxes_DINO b
-            where depth=(SELECT MIN(depth) from bounding_boxes_DINO )''')
+        SELECT b.geom,b.NAME
+            from bounding_boxes_DINO b''')
     if output is not None:
-        duckdb_2_gdf(bboxes_duckdb).to_file(output)
+        duckdb_2_gdf(bboxes_duckdb,'geom').to_file(output)
     
     return bboxes_duckdb
 

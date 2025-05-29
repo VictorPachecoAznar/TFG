@@ -28,6 +28,7 @@ class TestDINO(unittest.TestCase):
 
     def test_text_prompt(self):
         self.complete_image.pyramid=os.path.join(self.complete_image.folder,os.path.splitext(self.complete_image.basename)[0]+'_pyramid')
+        self.complete_image.resolutions=os.path.join(self.complete_image.folder,os.path.splitext(self.complete_image.basename)[0]+'_resolutions')
         t0=time.time()
         text_to_bbox_lowres_complete(self.complete_image,self.text_prompt,output=self.output_file)
         t1=time.time()
