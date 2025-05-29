@@ -16,8 +16,7 @@ text_prompt = "building"
 input_image_path=os.path.join(DATA_DIR,"ORTO_ZAL_BCN.tif")
 input_image=Ortophoto(input_image_path)
 
-def text_to_bbox_dino(input_image,text_prompt):
-    input_image.pyramid=os.path.join(input_image.folder,'ORTO_ZAL_BCN_pyramid')
+def text_to_bbox_dino(input_image,text_prompt,output=None):
     tiles_to_check=input_image.get_pyramid_tiles()
 
     sam = LangSAM_apb()
@@ -103,3 +102,106 @@ def text_to_bbox_dino(input_image,text_prompt):
             FROM iou_gdf
             WHERE result IS NOT NULL
             ''')
+    
+    if output is not None:
+        duckdb_2_gdf(bboxes_duckdb).to_file(output)
+    
+    return bboxes_duckdb
+   
+# pruebas
+
+# duckdb_2_gdf(DUCKDB.sql(
+#         '''        SELECT geom,result FROM(SELECT geom,MAX(result) result FROM(SELECT geom,
+#             CASE 
+#                 WHEN GEOM_INTERSECTION = 0 THEN NULL 
+#                 ELSE GEOM_INTERSECTION/GEOM_UNION
+#             END AS result
+#             FROM
+#         (SELECT 
+#                 b1.geom,b2.geom other_geoms,
+#                 ST_AREA(ST_UNION(b1.geom,b2.geom)) AS GEOM_UNION,
+#                 ST_AREA(ST_INTERSECTION(b1.geom,b2.geom)) AS GEOM_INTERSECTION, b1.depth
+#                     FROM non_complete_boxes b1 JOIN non_complete_boxes b2
+#                         ON ST_INTERSECTS(b1.geom,b2.geom) and not ST_CONTAINS(b2.geom,b1.geom)
+#                             WHERE b1.geom!=b2.geom
+#                                 GROUP BY b1.geom, b1.depth,b2.geom,b2.depth)
+#                     )group by geom)where result <0.4
+
+
+#         '''),'geom').to_file(os.path.join(OUT_DIR,'groundedDINO','geom_04_max_.geojson'))
+
+
+def text_to_bbox_lowres(
+        input_image:Ortophoto,
+        text_prompt:str,
+    ):
+    
+    tiles_to_check=input_image.get_pyramid_tiles()
+    sam = LangSAM_apb()
+    predict_prompt=partial(sam.predict_dino,text_prompt=text_prompt,box_threshold=0.24, text_threshold=0.2)
+
+    def predict_save(image):
+        pil_image=sam.path_to_pil(image)
+        boxes,logits,phrases=predict_prompt(pil_image)
+        sam.boxes=boxes
+        print('out')
+        return sam.save_boxes(dst_crs=input_image.crs)
+        
+    gdf_list_bboxes_DINO=list(map(predict_save,tiles_to_check))
+
+    for i in range(len(tiles_to_check)):
+        gdf_list_bboxes_DINO[i]['NAME']=tiles_to_check[i]
+
+    single_gdf_bboxes_DINO=pd.concat(gdf_list_bboxes_DINO)
+    #single_gdf_bboxes_DINO.to_file(os.path.join(OUT_DIR,'groundedDINO','only_dino.geojson'))
+    single_gdf_bboxes_DINO['geom']=single_gdf_bboxes_DINO.geometry.to_wkt()
+    df_bounding_boxes_DINO=single_gdf_bboxes_DINO[['NAME','geom']]
+
+    input_image.create_tiles_duckdb_table()
+    bounding_boxes_DINO=DUCKDB.sql('''
+        SELECT ST_GEOMFROMTEXT(geom) AS geom, NAME, CAST(parse_dirpath(name)[-1] AS INTEGER) depth
+            FROM df_bounding_boxes_DINO''')
+    
+    bboxes_duckdb=DUCKDB.sql('''
+        SELECT b.geom,b.NAME,b.depth
+            from bounding_boxes_DINO b
+            where depth=(SELECT MIN(depth) from bounding_boxes_DINO )''')
+
+
+def text_to_bbox_lowres_complete(
+        input_image:Ortophoto,
+        text_prompt:str,
+        output:str = None,
+    ):
+    
+    largest_tile=input_image.get_resolution_tiles()[-1]
+    sam = LangSAM_apb()
+    predict_prompt=partial(sam.predict_dino,text_prompt=text_prompt,box_threshold=0.24, text_threshold=0.2)
+
+    def predict_save(image):
+        pil_image=sam.path_to_pil(image)
+        boxes,logits,phrases=predict_prompt(pil_image)
+        sam.boxes=boxes
+        print('out')
+        return sam.save_boxes(dst_crs=input_image.crs)
+        
+    single_gdf_bboxes_DINO=predict_save(largest_tile)
+
+    single_gdf_bboxes_DINO['NAME']=largest_tile
+    #single_gdf_bboxes_DINO.to_file(os.path.join(OUT_DIR,'groundedDINO','only_dino.geojson'))
+    single_gdf_bboxes_DINO['geom']=single_gdf_bboxes_DINO.geometry.to_wkt()
+    df_bounding_boxes_DINO=single_gdf_bboxes_DINO[['NAME','geom']]
+
+    input_image.create_tiles_duckdb_table()
+    bounding_boxes_DINO=DUCKDB.sql('''
+        SELECT ST_GEOMFROMTEXT(geom) AS geom, NAME, CAST(parse_dirpath(name)[-1] AS INTEGER) depth
+            FROM df_bounding_boxes_DINO''')
+    
+    bboxes_duckdb=DUCKDB.sql('''
+        SELECT b.geom,b.NAME,b.depth
+            from bounding_boxes_DINO b
+            where depth=(SELECT MIN(depth) from bounding_boxes_DINO )''')
+    if output is not None:
+        duckdb_2_gdf(bboxes_duckdb).to_file(output)
+    
+    return bboxes_duckdb
