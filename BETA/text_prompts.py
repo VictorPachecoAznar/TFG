@@ -198,6 +198,7 @@ def text_to_bbox_lowres_complete(
     bboxes_duckdb=DUCKDB.sql('''
         SELECT b.geom,b.NAME
             from bounding_boxes_DINO b''')
+    print(output)
     if output is not None:
         duckdb_2_gdf(bboxes_duckdb,'geom').to_file(output)
     

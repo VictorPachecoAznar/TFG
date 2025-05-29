@@ -20,11 +20,12 @@ class TestDINO(unittest.TestCase):
         cls.path_orto = os.path.join(cls.test_folder, os.getenv('NAME_ORTOFOTO', 'ORTO_ME_BCN_2023.tif'))
         cls.text_prompt = os.getenv('TEXT_PROMPT','building')
         vector_file=os.getenv('VECTOR_FILE',None)
+        cls.complete_image = Ortophoto(cls.path_orto)
+        
         if vector_file is not None:
-            cls.output_file=os.path.join(cls.test_folder, vector_file)
+            cls.output_file=os.path.join(cls.complete_image.folder, vector_file)
         else:
             cls.output_file=vector_file
-        cls.complete_image = Ortophoto(cls.path_orto)
 
     def test_text_prompt(self):
         self.complete_image.pyramid=os.path.join(self.complete_image.folder,os.path.splitext(self.complete_image.basename)[0]+'_pyramid')
