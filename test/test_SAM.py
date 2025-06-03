@@ -2,10 +2,6 @@ import os
 from apb_spatial_computer_vision.sam_utilities import SamGeo_apb
 from apb_spatial_computer_vision.raster_utilities import Ortophoto
 from apb_spatial_computer_vision.main import pyramid_sam_apply
-from apb_spatial_computer_vision import *
-from BETA.text_prompts import text_to_bbox_lowres_complete
-from functools import partial
-import time
 
 import unittest
 

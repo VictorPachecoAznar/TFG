@@ -7,8 +7,8 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 # Add the root directory to sys.path
 sys.path.append(root_dir)
 
-from apb_spatial_computer_vision.__init__ import BASE_DIR,DATA_DIR,OUT_DIR
-from apb_spatial_computer_vision.raster_utilities import *
+from apb_spatial_computer_vision.__init__ import DATA_DIR,OUT_DIR
+from apb_spatial_computer_vision.raster_utilities import Tile
 
 
 def text_prompt():
@@ -29,8 +29,8 @@ def text_prompt():
     langSam.raster_to_vector('out.tif','edificios2.geojson')
 
 def box_prompt():
-
-    sam = SamGeo(
+    from apb_spatial_computer_vision.sam_utilities import SamGeo_apb
+    sam = SamGeo_apb(
     model_type="vit_h",
     automatic=False,
     sam_kwargs=None,

@@ -6,8 +6,8 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 # Add the root directory to sys.path
 sys.path.append(root_dir)
 
-from apb_spatial_computer_vision import *
-from main import read_file,prediction_to_bbox,duckdb_2_gdf
+from apb_spatial_computer_vision import DUCKDB,OUT_DIR
+from apb_spatial_computer_vision.main import read_file,prediction_to_bbox,duckdb_2_gdf
 import geopandas as gpd
 import numpy as np
 

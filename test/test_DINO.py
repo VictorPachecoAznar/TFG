@@ -2,7 +2,7 @@ import os
 from apb_spatial_computer_vision.lang_sam_utilities import LangSAM_apb
 from apb_spatial_computer_vision.raster_utilities import Ortophoto
 from apb_spatial_computer_vision import *
-from BETA.text_prompts import text_to_bbox_lowres_complete
+from apb_spatial_computer_vision.main import text_to_bbox_lowres_complete
 from functools import partial
 import time
 

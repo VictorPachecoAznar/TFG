@@ -166,42 +166,6 @@ def text_to_bbox_lowres(
             where depth=(SELECT MIN(depth) from bounding_boxes_DINO )''')
 
 
-def text_to_bbox_lowres_complete(
-        input_image:Ortophoto,
-        text_prompt:str,
-        output:str = None,
-    ):
-    
-    largest_tile=input_image.get_resolution_tiles()[-1]
-    sam = LangSAM_apb()
-    predict_prompt=partial(sam.predict_dino,text_prompt=text_prompt,box_threshold=0.24, text_threshold=0.2)
-
-    def predict_save(image):
-        pil_image=sam.path_to_pil(image)
-        boxes,logits,phrases=predict_prompt(pil_image)
-        sam.boxes=boxes
-        print('out')
-        return sam.save_boxes(dst_crs=input_image.crs)
-        
-    single_gdf_bboxes_DINO=predict_save(largest_tile)
-
-    single_gdf_bboxes_DINO['NAME']=largest_tile
-    #single_gdf_bboxes_DINO.to_file(os.path.join(OUT_DIR,'groundedDINO','only_dino.geojson'))
-    single_gdf_bboxes_DINO['geom']=single_gdf_bboxes_DINO.geometry.to_wkt()
-    df_bounding_boxes_DINO=single_gdf_bboxes_DINO[['NAME','geom']]
-    bounding_boxes_DINO=DUCKDB.sql('''
-        SELECT ST_GEOMFROMTEXT(geom) AS geom, NAME
-            FROM df_bounding_boxes_DINO''')
-    
-    bboxes_duckdb=DUCKDB.sql('''
-        SELECT b.geom,b.NAME
-            from bounding_boxes_DINO b''')
-    print(output)
-    if output is not None:
-        duckdb_2_gdf(bboxes_duckdb,'geom').to_file(output)
-    
-    return bboxes_duckdb
-
 
 if __name__=='__main__':
     text_prompt = "building"

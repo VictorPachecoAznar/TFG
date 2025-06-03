@@ -7,8 +7,9 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 # Add the root directory to sys.path
 sys.path.append(root_dir)
 
-from apb_spatial_computer_vision.raster_utilities import *
-from apb_spatial_computer_vision import *
+from apb_spatial_computer_vision.raster_utilities import Ortophoto
+import subprocess
+from apb_spatial_computer_vision import DATA_DIR,OUT_DIR
 #import cv2 as cv
 import numpy as np
 
