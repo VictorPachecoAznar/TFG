@@ -20,18 +20,24 @@ class TestSAM(unittest.TestCase):
         cls.path_orto = os.path.join(cls.test_folder, os.getenv('NAME_ORTOFOTO', 'ORTO_ME_BCN_2023.tif'))
         cls.complete_image = Ortophoto(cls.path_orto)
         cls.vector_file = os.path.join(cls.complete_image.folder,os.getenv('VECTOR_FILE',''))
+        cls.segmentation_name= os.getenv('TEXT_PROMPT','')
 
 
     def test_sam_from(self):
         sam = SamGeo_apb(
         model_type="vit_h",
         automatic=False,
-        sam_kwargs=None,
-        )
+        sam_kwargs=None,)
+
         self.complete_image.pyramid=os.path.join(self.complete_image.folder,os.path.splitext(self.complete_image.basename)[0]+'_pyramid')
-        t0=time.time()
-        pyramid_sam_apply(self.complete_image,self.vector_file,1024,'geom',1,sam)
-        t1=time.time()
+
+        pyramid_sam_apply(image_path=self.complete_image.raster_path,
+                          geospatial_prompt_file_path=self.vector_file,
+                          lowest_pixel_size=1024,
+                          geometry_column='geom',
+                          min_expected_element_area=1,
+                          segmentation_name=self.segmentation_name,
+                          sam=sam)
 
 
 if __name__ == '__main__':

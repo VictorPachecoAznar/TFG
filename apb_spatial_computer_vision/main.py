@@ -109,8 +109,7 @@ def filter_level(detections,pyramid_dir,depths,geometry_column):
     command = " UNION ALL ".join(
             [f"SELECT *, '{depth}' depth  FROM st_read('{os.path.join(pyramid_dir,'vector',f"subset_{depth}.geojson")}')" for depth in depths])
                             
-    tiles=DUCKDB.sql('CREATE TABLE tiles AS '+command)
-
+    tiles=DUCKDB.sql('CREATE TABLE IF NOT EXISTS tiles AS '+command)
     #tiles=read_file([os.path.join(pyramid_dir,'vector',f"subset_{depth}.geojson")for depth in depths])
 
     detections=detections.select('*')
@@ -184,7 +183,8 @@ def filter_level(detections,pyramid_dir,depths,geometry_column):
     
     cleans=DUCKDB.sql(f'''SELECT DISTINCT affected_tiles AS unique_tiles
                       FROM affected''')
-    final=None
+    
+    DUCKDB.sql('CREATE TABLE IF NOT EXISTS mosaics (MOSAIC VARCHAR, geom GEOMETRY, affected_tiles VARCHAR[], depth INTEGER)')
 
     if len(cleans)>0:
         
@@ -213,18 +213,19 @@ def filter_level(detections,pyramid_dir,depths,geometry_column):
         mosaics_data=[{'MOSAIC':i,'INDEX':j} for (i,j) in zip(mosaics,mosaic_index)]
         mosaics_df=pd.DataFrame(mosaics_data)
 
-        final=DUCKDB.sql(f'''
-            SELECT m.MOSAIC,c.geom, c.affected_tiles,c.depth
-                FROM mosaics_df m JOIN 
-                    (SELECT u.row_index, a.geom, a.affected_tiles,depth
-                        FROM cleans_indexed u JOIN affected a 
-                            on a.affected_tiles=u.unique_tiles) c
-                ON m.INDEX=c.row_index''')
+        DUCKDB.sql(f''' 
+            INSERT INTO mosaics(
+                SELECT m.MOSAIC,c.geom, c.affected_tiles,c.depth
+                    FROM mosaics_df m JOIN 
+                        (SELECT u.row_index, a.geom, a.affected_tiles,depth
+                            FROM cleans_indexed u JOIN affected a 
+                                on a.affected_tiles=u.unique_tiles) c
+                    ON m.INDEX=c.row_index)''')
         
-        new_contained=DUCKDB.sql('''SELECT NAME,depth, geom
+    new_contained=DUCKDB.sql('''SELECT NAME,depth, geom
                                     FROM contained
                                         UNION 
-                                    (SELECT MOSAIC, depth, geom FROM final)''')
+                                    (SELECT MOSAIC, depth, geom FROM mosaics)''')
     return tiles, new_contained
 
     # DUCKDB.sql(
@@ -614,9 +615,11 @@ def create_random_points(extents_list,tile_extents):
 
 def pyramid_sam_apply(image_path:str,
                       geospatial_prompt_file_path:str,
-                      lowest_pixel_size,
-                      geometry_column,
-                      min_expected_element_area,sam):
+                      lowest_pixel_size:int,
+                      geometry_column:str,
+                      min_expected_element_area:float,
+                      segmentation_name:str,
+                      sam:SamGeo_apb):
     """Iteratively generate SAM segmentations
 
     Args:
@@ -626,6 +629,7 @@ def pyramid_sam_apply(image_path:str,
         lowest_pixel_size (int): Pixel size for all tiles, which will have different resolutions
         geometry_column (str): Geometry column in the geospatial prompt file
         min_expected_element_area (numeric): 
+        segmentation_name (str): The name for the segmentation object. Default ''
         sam (_type_): _description_
     """
     input_image=Ortophoto(image_path)
@@ -642,10 +646,10 @@ def pyramid_sam_apply(image_path:str,
     contained_boxes=list(chain(*[results[i].get('CONTAINED_BOXES',None) for i in results.keys()]))
     contained_tiles=list(chain(*[results[i].get('CONTAINED_TILES',None) for i in results.keys()]))
 
-    sam_out_dir=folder_check(os.path.join(input_image.folder,'sam_results')) 
+    sam_out_dir=folder_check(os.path.join(input_image.folder,f'sam_results_{segmentation_name}')) 
     contained_sam_out_images,limit_sam_out_images=[],[]
 
-    for depth in list(reversed(depths)):
+    for depth in list(results.keys()):
         contained_sam_out_images,limit_sam_out_images=create_sam_dirs(sam_out_dir,results,depth,contained_sam_out_images,limit_sam_out_images) 
 
     sam_loaded_predict_tile=partial(predict_tile,sam=sam)
@@ -653,8 +657,8 @@ def pyramid_sam_apply(image_path:str,
     successful_contained=list(map(sam_loaded_predict_tile,contained_tiles,contained_boxes,contained_sam_out_images))
     successful_contained=[x for x in successful_contained if x is not None]
 
-    first_iteration_sammed_mosaic=os.path.join(sam_out_dir,'resultado_final1.tif')
-    first_iteration_sammed_vector=os.path.join(input_image.folder,'first_iteration.geojson')
+    first_iteration_sammed_mosaic=os.path.join(sam_out_dir,f'resultado_final1_{segmentation_name}.tif')
+    first_iteration_sammed_vector=os.path.join(sam_out_dir,f'first_iteration_{segmentation_name}.geojson')
 
     Ortophoto.mosaic_rasters(successful_contained,first_iteration_sammed_mosaic,pixel_value_to_be_ignored=0)
     wkt_first_iteration=SamGeo_apb.raster_to_vector(first_iteration_sammed_mosaic,output=first_iteration_sammed_vector,dst_crs=input_image.crs)
@@ -666,11 +670,14 @@ def pyramid_sam_apply(image_path:str,
                from df_first_iteration d''')
     
     #SEGUNDA ITERACIÓN DESACOPLADA, FALTA DESACOPLAR LA PRIMERA
-    create_second_iteration(input_image,
-                            first_iteration_predictions_tile,
-                            min_expected_element_area,
-                            lowest_pixel_size,
-                            contained_sam_out_images)
+    create_second_iteration(input_image=input_image,
+                            low_resolution_geometries_duckdb=first_iteration_predictions_tile,
+                            segmentation_name=segmentation_name,
+                            sam=sam,
+                            min_expected_element_area=min_expected_element_area,
+                            lowest_pixel_size=lowest_pixel_size,
+                            contained_sam_out_images=contained_sam_out_images,
+                            )
     
 def pyramid_sam_apply_geojson(image,prompt_file,lowest_pixel_size,geometry_column,sam):
     
@@ -705,9 +712,11 @@ def pyramid_sam_apply_geojson(image,prompt_file,lowest_pixel_size,geometry_colum
 def create_second_iteration(
     input_image: Ortophoto,
     low_resolution_geometries_duckdb:duckdb.DuckDBPyRelation,
+    segmentation_name:str,
+    sam:SamGeo_apb,
     min_expected_element_area:float=0.5,
     lowest_pixel_size:int=1024,
-    contained_sam_out_images=[]):
+    contained_sam_out_images=[],):
     
     # INPUTS
     input_image.create_tiles_duckdb_table(lowest_pixel_size)
@@ -791,7 +800,7 @@ def create_second_iteration(
                 join boxes_table b
                 on p.NAME=b.NAME''').fetchdf()
     
-    sam_out_dir=folder_check(os.path.join(input_image.folder,'sam_results')) 
+    sam_out_dir=folder_check(os.path.join(input_image.folder,f'sam_results_{segmentation_name}')) 
     limit_tiles=[out_prompts['NAME'].to_list()]
     positive_point_prompt=out_prompts['positive_coords'].to_list()
     negative_point_prompt=out_prompts['negative_coords'].to_list()
@@ -821,8 +830,8 @@ def create_second_iteration(
     
     
     ####################################################### TODA ESTA ZONA ES SUSCEPTIBLE DE SER OTRA FUNCIÓN #####################################
-    second_iteration_sammed_mosaic=os.path.join(sam_out_dir,'resultado_final2.tif')
-    second_iteration_sammed_vector=os.path.join(input_image.folder,'second_iteration.geojson')
+    second_iteration_sammed_mosaic=os.path.join(sam_out_dir,f'resultado_final2_{segmentation_name}.tif')
+    second_iteration_sammed_vector=os.path.join(sam_out_dir,f'second_iteration_{segmentation_name}.geojson')
     
     successful_contained_2.extend(out_fulls)
     Ortophoto.mosaic_rasters(successful_contained_2,second_iteration_sammed_mosaic,pixel_value_to_be_ignored=0,)
@@ -835,15 +844,15 @@ def create_second_iteration(
     second_iteration_predictions=DUCKDB.sql('''SELECT ST_GEOMFROMTEXT(d.wkt) as geom
                 from df_second_iteration d''')
     
-    duckdb_2_gdf(DUCKDB.sql('''
+    duckdb_2_gdf(DUCKDB.sql(f'''
         SELECT ST_INTERSECTION(a.geom,b.geom) as geom
             FROM
                 (SELECT ST_BUFFER(geom,0.5) geom FROM first_iteration_predictions
                     ) a
             JOIN (SELECT geom
                 FROM second_iteration_predictions
-                    WHERE ST_AREA(geom)>0.5) b
-            on ST_INTERSECTS(a.geom,b.geom)'''),'geom').to_parquet(os.path.join(input_image.folder,'clean_second_iteration_buffer.parquet')) 
+                    WHERE ST_AREA(geom)>{min_expected_element_area}) b
+            on ST_INTERSECTS(a.geom,b.geom)'''),'geom').to_parquet(os.path.join(input_image.folder,f'refined_segmentation_{segmentation_name}.parquet')) 
 
 if __name__=="__main__":
     #choose_model

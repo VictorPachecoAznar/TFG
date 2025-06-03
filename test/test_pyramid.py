@@ -80,14 +80,15 @@ class TestPyramid(unittest.TestCase):
         # print('picture')
         
     def test_polygonize_with_gdal(self):
-        print(self.complete_image.Y_pixel)
         t0 = time.time()
         self.complete_image.polygonize(1024)
         t1 = time.time()
         print(f'TIME OCURRED:{t1 - t0}')
     
-
-
+    def test_resolutions(self):
+        print(self.complete_image.pyramid)
+        self.complete_image.get_resolutions()
+    
 
 if __name__ == '__main__':
     unittest.main()
