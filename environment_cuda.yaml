@@ -1,6 +1,7 @@
 name: sam_apb_env
 channels:
   - conda-forge
+  - default
 dependencies:
   - gdal=3.10.2
   - geopandas=1.0.1
