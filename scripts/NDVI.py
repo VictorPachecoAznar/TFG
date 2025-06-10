@@ -8,8 +8,10 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(root_dir)
 
 from apb_spatial_computer_vision.raster_utilities import Ortophoto
+from apb_spatial_computer_vision.sam_utilities import raster_to_vector
 import subprocess
 from apb_spatial_computer_vision import DATA_DIR,OUT_DIR
+import time
 #import cv2 as cv
 import numpy as np
 
@@ -28,7 +30,7 @@ def safe_divide(a,b):
 
 
 if __name__=="__main__":
-    t0=time()
+    t0=time.time()
     complete_image=Ortophoto(os.path.join(DATA_DIR,"RS_ZAL_BCN.tif"))
     interesting_bands=complete_image
     mat=complete_image.raster.ReadAsArray()
@@ -55,10 +57,11 @@ if __name__=="__main__":
     dst_filename=os.path.join(DATA_DIR,'RS_NDVI_COMPLETE.TIF')
     complete_image.cloneBand(image,dst_filename)
     dst_geojson=os.path.join(OUT_DIR,'ndvi.geojson')
+    raster_to_vector(dst_filename,dst_geojson,dst_crs=complete_image.crs)
     
-    command=f'gdal_polygonize {dst_filename} -f "GeoJSON" {dst_geojson}'
-    subprocess.Popen(command,shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    t1=time()
+    # command=f'gdal_polygonize {dst_filename} -f "GeoJSON" {dst_geojson}'
+    # subprocess.Popen(command,shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    t1=time.time()
     print(f'TIEMPO TRANSCURRIDO {t1-t0}')
     #cv.imshow('foto',image)
     #cv.waitKey(0)
