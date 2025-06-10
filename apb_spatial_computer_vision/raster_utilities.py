@@ -73,6 +73,16 @@ def bounds_gdf(bounds,crs):
 class Ortophoto():
 
     def __init__(self,path=None,folder=None,crs=25831):
+        """Raster algorithm containing the different values to be kept.
+
+        Args:
+            path (str, optional): The path to the image, with the GDAL-accepted formats. Defaults to None.
+            folder (str, optional): The default folder for all computations to be performed. Defaults to None, and will be stored in with a name like DATA_DIR/{path}.
+            crs (int, optional): _description_. Defaults to 25831.
+
+        Raises:
+            Exception: _description_
+        """
         try:
             #os.path.exists(path):
             self.raster=gdal.Open(path)
@@ -228,6 +238,14 @@ class Ortophoto():
     
     @staticmethod
     def nice_write(num):
+        """Computes the needed digits to be applied to zfill for succesful number ordering
+
+        Args:
+            num (int): input number
+
+        Returns:
+            int: The number of digits to be applied into zfill
+        """
         '''Devuelve los ceros necesarios para la función zfill que permiten ordenar los números'''
         return int(log(num,10))+1
 
