@@ -15,7 +15,14 @@ class TestSAM(unittest.TestCase):
         cls.test_folder =  os.getenv('DATA_DIR', os.path.join(os.path.dirname(__file__), '..', 'data'))
         cls.path_orto = os.path.join(cls.test_folder, os.getenv('NAME_ORTOFOTO', 'ORTO_ME_BCN_2023.tif'))
         cls.complete_image = Ortophoto(cls.path_orto)
-        cls.vector_file = os.path.join(cls.complete_image.folder,os.getenv('VECTOR_FILE',''))
+        vector_file=os.getenv('VECTOR_FILE',None)
+        if vector_file is not None:
+            if os.path.exists(vector_file):
+                cls.output_file=vector_file
+            else:
+                cls.output_file=os.path.join(cls.complete_image.folder, vector_file)
+        else:
+            cls.output_file=vector_file
         cls.segmentation_name= os.getenv('TEXT_PROMPT','')
 
 

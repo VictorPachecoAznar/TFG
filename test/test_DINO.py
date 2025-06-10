@@ -23,7 +23,10 @@ class TestDINO(unittest.TestCase):
         cls.complete_image = Ortophoto(cls.path_orto)
         
         if vector_file is not None:
-            cls.output_file=os.path.join(cls.complete_image.folder, vector_file)
+            if os.path.exists(vector_file):
+                cls.output_file=vector_file
+            else:
+                cls.output_file=os.path.join(cls.complete_image.folder, vector_file)
         else:
             cls.output_file=vector_file
 
