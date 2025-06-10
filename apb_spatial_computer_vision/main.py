@@ -1,8 +1,9 @@
-from apb_spatial_computer_vision import *
+from apb_spatial_computer_vision import DATA_DIR, DUCKDB, OUT_DIR, duckdb
 from apb_spatial_computer_vision.raster_utilities import Ortophoto,folder_check
 
 from concurrent.futures import ProcessPoolExecutor
 
+import os
 import geopandas as gpd, pandas as pd, numpy as np
 import time
 from functools import partial
@@ -10,8 +11,6 @@ from collections import ChainMap
 from collections.abc import Iterable
 from apb_spatial_computer_vision.lang_sam_utilities import LangSAM_apb
 from apb_spatial_computer_vision.sam_utilities import SamGeo_apb
-
-#print(folder_check(TEMP_DIR))
 
 def choose_model(name):
     #CREAR DATASET
@@ -110,7 +109,6 @@ def filter_level(detections,pyramid_dir,depths,geometry_column, segmentation_nam
             [f"SELECT *, '{depth}' depth  FROM st_read('{os.path.join(pyramid_dir,'vector',f"subset_{depth}.geojson")}')" for depth in depths])
                             
     tiles=DUCKDB.sql('CREATE TABLE IF NOT EXISTS tiles AS '+command)
-    #tiles=read_file([os.path.join(pyramid_dir,'vector',f"subset_{depth}.geojson")for depth in depths])
 
     detections=detections.select('*')
     #CONNECT PREDICTION TO TILE
@@ -156,29 +154,20 @@ def filter_level(detections,pyramid_dir,depths,geometry_column, segmentation_nam
                     ON ST_INTERSECTS(t.geom,g.geom) AND NOT ST_CONTAINS(t.geom,g.geom)
                     WHERE predict_geom NOT IN (SELECT distinct geom FROM contained)''')
     
-    # DUCKDB.sql(
-    #     f'''SELECT l.NAME, l.depth,l.tile_geom, l.predict_geom
-    #         FROM(SELECT t.NAME, t.depth,t.geom AS tile_geom, g.{geometry_column} AS predict_geom
-    #             FROM tiles t 
-    #             JOIN detections g
-    #                 ON ST_INTERSECTS(t.geom,g.{geometry_column}) AND NOT ST_CONTAINS(t.geom,g.{geometry_column}))l
-                
-    #                 on c.geom=l.predict_geom and c.depth=c.depth''')
-    
     affected=DUCKDB.sql(
-            f'''SELECT t1.affected_tiles, t1.depth, t1.geom
-                FROM (SELECT LIST(NAME) AS affected_tiles, count(depth),predict_geom as geom,depth
-                FROM limiting
-                    group by predict_geom,depth
-                    having count(NAME) =2) t1
-                    JOIN(
-                                    SELECT MAX(depth) depth,geom
-                                    FROM (SELECT count(NAME) AS affected_tiles, count(depth),predict_geom as geom,depth
-                                            FROM limiting
-                                            group by predict_geom,depth
-                                            having count(NAME) =2)
-                                    group by geom) t2
-                    on t1.depth=t2.depth and t1.geom=t2.geom
+        f'''SELECT t1.affected_tiles, t1.depth, t1.geom
+            FROM (SELECT LIST(NAME) AS affected_tiles, count(depth),predict_geom as geom,depth
+            FROM limiting
+                group by predict_geom,depth
+                having count(NAME) =2) t1
+                JOIN(
+                    SELECT MAX(depth) depth,geom
+                    FROM (SELECT count(NAME) AS affected_tiles, count(depth),predict_geom as geom,depth
+                            FROM limiting
+                            group by predict_geom,depth
+                            having count(NAME) =2)
+                    group by geom) t2
+        on t1.depth=t2.depth and t1.geom=t2.geom
                     ''')
     
     cleans=DUCKDB.sql(f'''SELECT DISTINCT affected_tiles AS unique_tiles
@@ -228,143 +217,6 @@ def filter_level(detections,pyramid_dir,depths,geometry_column, segmentation_nam
                                     (SELECT MOSAIC, depth, geom FROM mosaics)''')
     return tiles, new_contained
 
-    # DUCKDB.sql(
-    #     f'''SELECT t1.depth,t2.predict_geom geom,t1.NAME FROM within t1
-    #      JOIN
-    #         (SELECT MAX(depth) depth, w.predict_geom
-    #            FROM within w
-    #            GROUP BY w.predict_geom) t2
-    #            ON t1.depth=t2.depth AND t1.predict_geom=t2.predict_geom
-    #             ''')
-    
-    limit=DUCKDB.sql('''SELECT NAME, predict_geom
-                      FROM intersection
-                      WHERE predict_geom 
-                     NOT IN (SELECT geom FROM contained)
-                      GROUP BY predict_geom''')
-    # DUCKDB.sql(
-    #     f'''JOIN (SELECT geom from contained) c
-        
-    #             ''')
-    # DUCKDB.sql(
-    #     f'''SELECT LIST(i3.NAME),i2.geom
-    #         FROM(SELECT MAX(depth), c.geom
-    #             FROM intersection i1
-    #             JOIN (SELECT geom from contained) c
-    #             ON c.geom=i1.predict_geom
-    #             GROUP BY c.geom) i2 join intersection i3
-    #             on i2.geom=i3.predict_geom and i2.depth=i3.depth
-    #             GROUP BY i2.geom
-    #             ''')
-    
-    # duckdb_2_gdf(DUCKDB.sql(
-    #     f'''SELECT LIST(i3.NAME) CONTAINED_ELEMENTS,i2.geom
-    #         FROM(SELECT MAX(depth) depth, c.geom
-    #             FROM intersection i1
-    #             JOIN (SELECT geom from contained) c
-    #             ON c.geom=i1.predict_geom
-    #             GROUP BY c.geom) i2 join intersection i3
-    #             on i2.geom=i3.predict_geom and i2.depth=i3.depth
-    #             WHERE ST_CONTAINS(i2.geom,i2.tile_geom)
-    #             GROUP BY i2.geom
-    #             '''),'geom').to_file(os.path.join(OUT_DIR,'prueba_teselas_limite_3.geojson'))
-
-    # duckdb_2_gdf(DUCKDB.sql(
-    #     f'''SELECT LIST(i3.NAME) CONTAINED_ELEMENTS,ST_COLLECT(LIST(ST_INTERSECTION(i3.predict_geom,i3.tile_geom))) geom, i3.predict_geom
-    #         FROM(SELECT MAX(depth) depth, c.geom
-    #             FROM intersection i1
-    #             JOIN (SELECT geom from contained) c
-    #             ON c.geom=i1.predict_geom
-    #             GROUP BY c.geom) i2 join intersection i3
-    #             on i2.geom=i3.predict_geom and i2.depth=i3.depth
-    #             WHERE NOT ST_CONTAINS(i3.predict_geom,i3.tile_geom)
-    #             GROUP BY i3.predict_geom,i3.tile_geom 
-                
-    #             '''),'geom').to_file(os.path.join(OUT_DIR,'prueba_teselas_limite_15.geojson'))
-
-    if len(intersection)==0:
-        raise Exception('THE PYRAMID DOES NOT CONTAIN THESE ELEMENTS')
-    
-    #FIND PREDICTIONS BETWEEN TILES
-    predict_geom_repes=DUCKDB.sql('''
-        SELECT predict_geom,NAME
-            FROM intersection
-                WHERE predict_geom IN ( SELECT predict_geom
-                                        FROM intersection
-                                            GROUP BY predict_geom
-                                            HAVING COUNT(*)>1)''')
-    predict_geom_repes=DUCKDB.sql('''
-            SELECT predict_geom,NAME,depth
-            FROM intersection
-               JOIN (SELECT predict_geom,depth
-                                        FROM intersection
-                                            GROUP BY predict_geom,depth
-                                            HAVING COUNT(*)>1)t2
-               ON t2.predict_geom=intersection.predict_geom''')
-
-    #LIST TILES IN WHICH BETWEEN WHICH THE PREDICTIONS LAY
-    affected=DUCKDB.sql(
-        '''SELECT LIST(NAME) affected_tiles, predict_geom geom
-            FROM predict_geom_repes
-                GROUP BY predict_geom''')
-    
-    #FIND GEOMETRIES THAT WILL BE FURTHER CALCULATED 
-    exiters=DUCKDB.sql(
-        '''SELECT i.NAME, i.predict_geom AS geom
-                FROM intersection i 
-                    FULL OUTER JOIN  predict_geom_repes a
-                    ON i.predict_geom=a.predict_geom
-                        WHERE a.predict_geom IS NULL
-                        OR i.predict_geom IS NULL''')
-     
-    # FINDS THE UNIQUE VIRTUAL LAYERS TO BE CREATED
-    cleans=DUCKDB.sql(f'''SELECT DISTINCT affected_tiles AS unique_tiles
-                      FROM affected''')
-    final=None
-
-    if len(cleans)>0:
-        
-        #CREATES INDICES TO NAME THE ELEMENTS OF THE VIRTUAL LAYERS
-        cleans_indexed=DUCKDB.sql(f'''SELECT *,ROW_NUMBER() OVER (ORDER BY unique_tiles) AS row_index
-                            FROM cleans
-            ''')
-
-        combi=DUCKDB.sql(
-            """
-            SELECT *
-                FROM cleans_indexed c JOIN affected a
-                    ON c.unique_tiles=a.affected_tiles
-                            """)
-
-        relation_gdf=duckdb_2_gdf(combi,'geom',25831)
-
-        #fun=lambda x:[i for i in x]
-        array=[i for i in cleans_indexed['unique_tiles'].fetchnumpy()['unique_tiles']]
-        virtuals_dir=folder_check(os.path.join(os.path.dirname(pyramid_dir),'virtuals'))
-        level_virtual_dir=folder_check(os.path.join(virtuals_dir,f'virtuals_{depth}'))
-        names=[os.path.join(level_virtual_dir,str(i)) for i in range(1,len(cleans_indexed)+1)]
-
-        with ProcessPoolExecutor(5) as Executor:
-            mosaics=list(Executor.map(Ortophoto.mosaic_rasters,array,names))
-
-        mosaic_index=[int(os.path.splitext(os.path.basename(i))[0]) for i in mosaics]
-
-        mosaics_data=[{'MOSAIC':i,'INDEX':j} for (i,j) in zip(mosaics,mosaic_index)]
-        mosaics_df=pd.DataFrame(mosaics_data)
-
-        final=DUCKDB.sql(f'''
-            SELECT m.MOSAIC,c.geom, c.affected_tiles
-                FROM mosaics_df m JOIN 
-                    (SELECT u.row_index, a.geom, a.affected_tiles
-                        FROM cleans_indexed u JOIN affected a 
-                            on a.affected_tiles=u.unique_tiles) c
-                ON m.INDEX=c.row_index''')
-
-
-    return exiters, final
-    
-
-
 def create_file_from_sql(table,column,name,file_name,crs):
     """Creates a GeoJSON file from an SQL projection ("SELECT" operation into a column)
 
@@ -387,7 +239,6 @@ def create_file_from_sql(table,column,name,file_name,crs):
     except:
         pass
 
-    
 def create_files_from_sql(tab: duckdb.DuckDBPyRelation, column:str, tile_names: Iterable,file_names:Iterable,crs=25831):
     """ Creates multiple GeoJSON files from an SQL projection ("SELECT" operation into a column) for each tile name.
     Args:
@@ -505,6 +356,7 @@ def post_processing_geojson(depth: int,
                             pyramid_dir: str,
                             detections: duckdb.DuckDBPyRelation,
                             output_dir: str):
+    
     """Function to store in GeoJSON files the detections into several different elements in order to find out what happened inside the process.
 
     Args:
@@ -516,6 +368,7 @@ def post_processing_geojson(depth: int,
     Returns:
         dict: Contains the names for the tiles and the arrays for the boxes
     """
+    pass
     contained_dir,limit_dir=create_level_dirs(output_dir,depth)
     contained,limit=filter_level(detections,pyramid_dir,depth,'geom')
     contained_tiles,contained_boxes=create_geojson_mass(contained,'NAME',contained_dir)
@@ -528,7 +381,7 @@ def predict_tile(image_path,boxes,out_name,sam):
         image_path (str | np.array): Path to the tile or numpy array stemming from GDAL ReadAsArray(), or in this package tems, Ortophoto.raster.ReadAsArray()
         boxes (Iterable | str [GeoJSON]): Nested list of bounds (X_min,Y_min,X_max,Y_max), or the path to a GeoJSON path containing Polygon geometries.          
         out_name (str): Name for the output file, can be either vector (GeoJSON) or Raster (GeoTIFF)
-        sam (SamGeo_apb): SAM model instance to be used
+        sam (SamGeo_apb): The SAM model
     """
 
     if isinstance(boxes,str):
@@ -553,7 +406,19 @@ def predict_tile(image_path,boxes,out_name,sam):
         print('only GeoJSON or BOX POINT lists allowed')
 
 def predict_tile_points(image_path,boxes,out_name,point_coords,point_labels,sam):
-   
+    """Calls SAM predict using point prompts
+
+    Args:
+        image_path (str): Image path
+        boxes (Iterable): Nested list of bounds (X_min,Y_min,X_max,Y_max), or the path to a GeoJSON path containing Polygon geometries.
+        out_name (str): Name of the output file.
+        point_coords (Iterable): [(x1,y1),...,(xn,yn)] with the points
+        point_labels (Iterable): 0 (negative) or 1 (positive) labeling of the points
+        sam (SamGeo_apb): The SAM model
+
+    Returns:
+        _type_: _description_
+    """
     if isinstance(boxes,str):
         boxes+='.geojson'
         if os.path.exists(boxes):
@@ -563,8 +428,7 @@ def predict_tile_points(image_path,boxes,out_name,point_coords,point_labels,sam)
                 return out_name
             except:
                 print(f'{out_name} could not be loaded')
-                
-                    
+                               
     elif isinstance(boxes,list) and isinstance(boxes[0],Iterable) and not isinstance(boxes[0],str) :
         sam.set_image(image_path)
         try:
@@ -573,10 +437,10 @@ def predict_tile_points(image_path,boxes,out_name,point_coords,point_labels,sam)
             return out_name
         except:
             print(f'{out_name} could not be loaded')
+            
     else:
         print('only GeoJSON or BOX POINT lists allowed')
  
-
 def create_sam_dirs(sam_out_dir,results,depth,contained_sam_out_images=[],limit_sam_out_images=[]):
     """Generate the dirs for the batch SAM prediction and finds the available files to be found.    
     Meant for recursion.
@@ -613,7 +477,6 @@ def create_random_points(extents_list,tile_extents):
     for i in range(len(tile_extents)):
         DUCKDB.execute(f'''INSERT INTO random_points SELECT * geom FROM ST_GENERATEPOINTS({tile_extents[i]}::BOX_2D,100)''')
     
-
 def pyramid_sam_apply(image_path:str,
                       geospatial_prompt_file_path:str,
                       lowest_pixel_size:int,
@@ -625,14 +488,15 @@ def pyramid_sam_apply(image_path:str,
 
     Args:
         image (str): Aerial image to be segmented
-        geospatial_prompt_file (str): Path to any geospatial file. 
+        geospatial_prompt_file_path (str): Path to any geospatial file. 
                                         Available formats: see ST_READ drivers in DuckDB (run DUCKDB.sql('SELECT * FROM ST_Drivers();')).
         lowest_pixel_size (int): Pixel size for all tiles, which will have different resolutions
         geometry_column (str): Geometry column in the geospatial prompt file
         min_expected_element_area (numeric): 
         segmentation_name (str): The name for the segmentation object. Should be defaulted to ''
-        sam (SamGeo_apb): Instance from the SamGeo_apb class
+        sam (SamGeo_apb): The SAM model
     """
+    
     input_image=Ortophoto(image_path)
     detections=read_file(geospatial_prompt_file_path)
     input_image.pyramid=folder_check(os.path.join(input_image.folder,os.path.basename(input_image.raster_path).split('.')[0])+'_pyramid')
@@ -682,6 +546,8 @@ def pyramid_sam_apply(image_path:str,
     
 def pyramid_sam_apply_geojson(image,prompt_file,lowest_pixel_size,geometry_column,sam):
     
+    pass
+
     input_image=Ortophoto(image)
     detections=read_file(prompt_file)
     data_loaded_post_processing=partial(post_processing,pyramid_dir=input_image.get_pyramid(lowest_pixel_size),detections=detections,geometry_column=geometry_column)
@@ -709,6 +575,30 @@ def pyramid_sam_apply_geojson(image,prompt_file,lowest_pixel_size,geometry_colum
     sam_loaded_predict_tile=partial(predict_tile,sam=sam)
     list(map(sam_loaded_predict_tile,contained_tiles,contained_boxes,contained_sam_out_images))
     list(map(sam_loaded_predict_tile,limit_tiles,limit_boxes,limit_sam_out_images))
+
+def point_prompt_based_sam(
+    image_path:str,
+    geospatial_prompt_file_path:str,
+    segmentation_name:str,
+    sam:SamGeo_apb,
+    min_expected_element_area:float=0.5,
+    lowest_pixel_size:int=1024,   
+    contained_sam_out_images=[],):
+    """Reads geospatial prompt files to improve segmentation
+
+    Args:
+        image_path (str): Path to the image to be segmented
+        geospatial_prompt_file_path (str): Geospatial prompt file to be called
+        segmentation_name (str): The name for the segmentation object
+        sam (SamGeo_apb): The SAM model
+        min_expected_element_area (float, optional): Area of the smallest element to be expected. Defaults to 0.5.
+        lowest_pixel_size (int, optional): Pixel size for each tile of the pyramid.  Defaults to 1024.
+        contained_sam_out_images (list, optional): Paths to the files to be created. Defaults to [].
+    """
+    input_image=Ortophoto(image_path)
+    low_resolution_geometries_duckdb=read_file(geospatial_prompt_file_path) 
+
+    create_second_iteration(input_image,low_resolution_geometries_duckdb,segmentation_name,sam,min_expected_element_area,lowest_pixel_size,contained_sam_out_images)
 
 def create_second_iteration(
     input_image: Ortophoto,
@@ -912,7 +802,6 @@ def text_to_bbox_lowres_complete(
         duckdb_2_gdf(bboxes_duckdb,'geom').to_file(output)
     
     return bboxes_duckdb
-
 
 if __name__=="__main__":
     #choose_model

@@ -1,5 +1,5 @@
 import fire
-from apb_spatial_computer_vision.main import pyramid_sam_apply,text_to_bbox_lowres_complete,create_second_iteration
+from apb_spatial_computer_vision.main import pyramid_sam_apply,text_to_bbox_lowres_complete,point_prompt_based_sam
 from functools import partial,update_wrapper
 from apb_spatial_computer_vision.lang_sam_utilities import LangSAM_apb
 from apb_spatial_computer_vision.sam_utilities import SamGeo_apb
@@ -20,7 +20,7 @@ if __name__ == '__main__':
     fire.Fire({
         'dino': smart_partial(text_to_bbox_lowres_complete,sam=lang_sam),
         'sam' : smart_partial(pyramid_sam_apply,sam=sam),
-        'second_iteration': smart_partial(create_second_iteration,sam=sam)
+        'second_iteration': smart_partial(point_prompt_based_sam,sam=sam)
     })
     
     partial(pyramid_sam_apply,sam=sam)
