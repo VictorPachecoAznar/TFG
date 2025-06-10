@@ -93,7 +93,7 @@ def duckdb_2_gdf(tab: duckdb.DuckDBPyRelation,geometry_column,crs=25831):
     return geodf
 
 
-def filter_level(detections,pyramid_dir,depths,geometry_column):
+def filter_level(detections,pyramid_dir,depths,geometry_column, segmentation_name):
     """Finds which elements are contained and limiting to each tile, prompting the creation of virtual layers
 
     Args:        
@@ -202,7 +202,7 @@ def filter_level(detections,pyramid_dir,depths,geometry_column):
 
 
         array=[i for i in cleans_indexed['unique_tiles'].fetchnumpy()['unique_tiles']]
-        virtuals_dir=folder_check(os.path.join(os.path.dirname(pyramid_dir),'virtuals'))
+        virtuals_dir=folder_check(os.path.join(os.path.dirname(pyramid_dir),f'virtuals_{segmentation_name}'))
         names=[os.path.join(virtuals_dir,str(i)) for i in range(1,len(cleans_indexed)+1)]
 
         with ProcessPoolExecutor(5) as Executor:
@@ -483,7 +483,8 @@ def create_level_dirs(results_dir, depth):
 def post_processing(depths: Iterable[int],
                     pyramid_dir: str,
                     detections: duckdb.DuckDBPyRelation,
-                    geometry_column='geom'
+                    geometry_column='geom',
+                    segmentation_name=''
 ):
     """Function to store in arrays files the detections into several different elements in order to find out what happened inside the process.
 
@@ -495,7 +496,7 @@ def post_processing(depths: Iterable[int],
     Returns:
         dict: Contains the names for the tiles and the arrays (minx,miny,maxx,maxy) for the boxes grouped by name of tile 
     """
-    tiles,contained=filter_level(detections,pyramid_dir,depths,geometry_column)
+    tiles,contained=filter_level(detections,pyramid_dir,depths,geometry_column,segmentation_name)
     contained_tiles,contained_boxes,depths=create_bboxes_sam(contained,'NAME')
     #limit_tiles,limit_boxes=create_bboxes_sam(limit,'MOSAIC')
     return tiles, [{depths[i]:{'CONTAINED_TILES':contained_tiles[i],'CONTAINED_BOXES':contained_boxes[i]}} for i in range(len(depths))]
@@ -602,8 +603,8 @@ def create_random_points(extents_list,tile_extents):
         Stores them in table random_points in the DUCKDB connection
 
     Args:
-        extents_list (Iterable): Elements in
-        tile_extents (Iterable): _description_
+        extents_list (Iterable): DUCKDB extent list (format achieved using ST_EXTENT())
+        tile_extents (Iterable): Paths to the files where the random points are to be placed
     """
     DUCKDB.execute(f"CREATE TABLE random_points AS SELECT * geom FROM ST_GENERATEPOINTS({extents_list[0]}::BOX_2D,100)")
 
@@ -629,8 +630,8 @@ def pyramid_sam_apply(image_path:str,
         lowest_pixel_size (int): Pixel size for all tiles, which will have different resolutions
         geometry_column (str): Geometry column in the geospatial prompt file
         min_expected_element_area (numeric): 
-        segmentation_name (str): The name for the segmentation object. Default ''
-        sam (_type_): _description_
+        segmentation_name (str): The name for the segmentation object. Should be defaulted to ''
+        sam (SamGeo_apb): Instance from the SamGeo_apb class
     """
     input_image=Ortophoto(image_path)
     detections=read_file(geospatial_prompt_file_path)
@@ -638,7 +639,7 @@ def pyramid_sam_apply(image_path:str,
     pyramid=input_image.get_pyramid(lowest_pixel_size)    
     depths=[depth for depth in range(input_image.get_pyramid_depth())]
     
-    tiles,result=post_processing(pyramid_dir=pyramid,detections=detections,geometry_column=geometry_column,depths=depths)
+    tiles,result=post_processing(pyramid_dir=pyramid,detections=detections,geometry_column=geometry_column,depths=depths,segmentation_name=segmentation_name)
     results=dict(ChainMap(*result))
     
     from itertools import chain
@@ -717,7 +718,18 @@ def create_second_iteration(
     min_expected_element_area:float=0.5,
     lowest_pixel_size:int=1024,
     contained_sam_out_images=[],):
-    
+    """Improves an existing segmentation by applying point prompting, then compares it to the input for a cleaner refined iteration
+
+    Args:
+        input_image (Ortophoto): Aerial image to be segmented
+        low_resolution_geometries_duckdb (duckdb.DuckDBPyRelation): Previous iteration or read file using the read_file() function in this modules
+                 Available formats: see ST_READ drivers in DuckDB (run DUCKDB.sql('SELECT * FROM ST_Drivers();')). 
+        segmentation_name (str):  The name for the segmentation object.
+        sam (SamGeo_apb): The SAM model
+        min_expected_element_area (float, optional): Area of the smallest element to be expected. Defaults to 0.5.
+        lowest_pixel_size (int, optional): Pixel size for each tile of the pyramid. Defaults to 1024.
+        contained_sam_out_images (list, optional): Paths to the files to be created. Defaults to []. If not declared, it will be stored in a subfolder of the image folder 
+    """
     # INPUTS
     input_image.create_tiles_duckdb_table(lowest_pixel_size)
     first_iteration_predictions=low_resolution_geometries_duckdb.select('geom')
@@ -858,17 +870,28 @@ def text_to_bbox_lowres_complete(
         input_image:Ortophoto,
         text_prompt:str,
         output:str = None,
+        sam:LangSAM_apb=None
     ):
-    
+    """Generate bouding boxes from a text prompt. Calls the Grounding DINO parts of LangSAM excluding SAM use, speeding up the prediction of this task.
+
+    Args:
+        input_image (Ortophoto): Aerial image where the element should be identified
+        text_prompt (str): Prompt for Grounding DINO.
+        output (str, optional): Path of where to store the bounding box geometries. Defaults to None
+        sam (LangSAM_apb,optional). Modified SAMGeo to allow for selfstanding DINO. Defaults to none
+
+    Returns:
+        _type_: _description_
+    """
     largest_tile=input_image.get_resolution_tiles()[-1]
-    sam = LangSAM_apb()
+    if sam is None:
+        sam = LangSAM_apb()
     predict_prompt=partial(sam.predict_dino,text_prompt=text_prompt,box_threshold=0.24, text_threshold=0.2)
 
     def predict_save(image):
         pil_image=sam.path_to_pil(image)
         boxes,logits,phrases=predict_prompt(pil_image)
         sam.boxes=boxes
-        print('out')
         return sam.save_boxes(dst_crs=input_image.crs)
         
     single_gdf_bboxes_DINO=predict_save(largest_tile)
@@ -949,7 +972,7 @@ if __name__=="__main__":
     # 
     detections=os.path.join(OUT_DIR,'QGIS_BUILDINGS','ORIENTED_BOXES.GEOJSON')
     #detections=os.path.join(OUT_DIR,'tanks_50c_40iou.geojson')
-    pyramid_sam_apply(input_image,detections,1024,'geom',0.5,sam)
+    pyramid_sam_apply(input_image,detections,1024,'geom',0.5,'qgis_buildings',sam)
     
 
     pass    
