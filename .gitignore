@@ -499,6 +499,8 @@ data/ORTOFOTO_CHECK.qmd
 training_data_export_parameters
 out/
 data/
+collab/
 data/geodesy
 data/COMPROV ORTO.txt
 *.geojson
+temp/
