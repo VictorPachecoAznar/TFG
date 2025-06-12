@@ -57,6 +57,7 @@ env/
 *.jpg
 *.vrt
 *.png
+*.ipynb
 
 update_yaml.txt
 
@@ -502,6 +503,8 @@ data/
 collab/
 data/geodesy
 data/COMPROV ORTO.txt
-*.geojson
 temp/
 static/
+shell/UTMOHehx.exe
+jupyter/
+models/
