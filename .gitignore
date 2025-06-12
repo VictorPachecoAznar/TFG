@@ -504,3 +504,4 @@ data/geodesy
 data/COMPROV ORTO.txt
 *.geojson
 temp/
+static/
