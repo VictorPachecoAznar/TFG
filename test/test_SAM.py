@@ -18,11 +18,11 @@ class TestSAM(unittest.TestCase):
         vector_file=os.getenv('VECTOR_FILE',None)
         if vector_file is not None:
             if os.path.exists(vector_file):
-                cls.output_file=vector_file
+                cls.vector_file=vector_file
             else:
-                cls.output_file=os.path.join(cls.complete_image.folder, vector_file)
+                cls.vector_file=os.path.join(cls.complete_image.folder, vector_file)
         else:
-            cls.output_file=vector_file
+            cls.vector_file=vector_file
         cls.segmentation_name= os.getenv('TEXT_PROMPT','')
 
 
