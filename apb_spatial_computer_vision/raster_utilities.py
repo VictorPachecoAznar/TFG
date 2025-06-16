@@ -424,6 +424,14 @@ class Ortophoto():
             _native_parallelized_simplifly_single_raster(name=df['Name'][i],xRes=df['xRes'][i],yRes=df['yRes'][i],bounds=self.bounds,raster=self)
 
     def create_pyramid(self,lowest_pixel_size):
+        """Generates a log_2 based image pyramid with the most available tiles.
+
+        Args:
+            lowest_pixel_size (int): Number of pixels of the size for each tile
+
+        Returns:
+            pyramid_dir: The path to where the pyramid was stored
+        """
         
         largest_side=max(self.pixel_width,self.pixel_height)
         smallest_side=min(self.pixel_width,self.pixel_height)    
