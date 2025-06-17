@@ -31,10 +31,10 @@ jobs:
           auto-update-conda: true
 
       - name: Install pdoc
-        run: conda run -n myenv pip install pdoc
+        run: conda run -n sam_apb_env pip install pdoc
 
       - name: Generate documentation
-        run: conda run -n myenv pdoc -o docs/ apb_spatial_computer_vision
+        run: conda run -n sam_apb_env pdoc -o docs/ apb_spatial_computer_vision
 
       - uses: actions/upload-pages-artifact@v3
         with:
