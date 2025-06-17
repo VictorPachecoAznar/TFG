@@ -4,7 +4,7 @@ name: website
 on:
   push:
     branches:
-      - main
+      - webdocs
     # Alternative: only build for tags.
     # tags:
     #   - '*'
@@ -30,29 +30,32 @@ jobs:
           auto-activate-base: false
           auto-update-conda: true
 
-      - name: Install pdoc
-        run: conda run -n sam_apb_env pip install pdoc
+      # - name: Install pdoc
+      #   run: conda run -n sam_apb_env pip install pdoc
 
-      - name: Generate documentation
-        run: conda run -n sam_apb_env pdoc -o docs/ apb_spatial_computer_vision
+      # - name: Generate documentation
+      #   run: conda run -n sam_apb_env pdoc -o docs/ apb_spatial_computer_vision
 
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs/
+      # - uses: actions/upload-pages-artifact@v3
+      #   with:
+      #     path: docs/
 
+        -name: Install mkdocs
+          run: conda run -n sam_apb_env pip install mkdocs mkdocstrings[python] mkdocs-material
+        -name: Push to ghpages
+          run: mkdocs gh-deploy --force
 
-
-  # Deploy the artifact to GitHub pages.
-  # This is a separate job so that only actions/deploy-pages has the necessary permissions.
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+  # # Deploy the artifact to GitHub pages.
+  # # This is a separate job so that only actions/deploy-pages has the necessary permissions.
+  # deploy:
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     pages: write
+  #     id-token: write
+  #   environment:
+  #     name: github-pages
+  #     url: ${{ steps.deployment.outputs.page_url }}
+  #   steps:
+  #     - id: deployment
+  #       uses: actions/deploy-pages@v4
