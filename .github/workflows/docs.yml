@@ -4,7 +4,7 @@ name: website
 on:
   push:
     branches:
-      - main
+      - mkdocs
     # Alternative: only build for tags.
     # tags:
     #   - '*'
