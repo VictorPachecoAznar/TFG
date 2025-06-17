@@ -13,30 +13,34 @@ on:
 permissions:
   contents: read
 
+
 jobs:
-  # Build the documentation and upload the static HTML files as an artifact.
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+
+      - name: Set up Miniconda
+        uses: conda-incubator/setup-miniconda@v2
         with:
-          python-version: '3.13'
+          environment-file: environment_cpu.yml
+          activate-environment: sam_apb_env  # Replace with your env name if different
+          auto-activate-base: false
+          auto-update-conda: true
 
-      # ADJUST THIS: install all dependencies (including pdoc)
-      - run: pip install pdoc
-      - run: pip install -r requirements.txt
+      - name: Install pdoc
+        run: conda run -n myenv pip install pdoc
 
-      # ADJUST THIS: build your documentation into docs/.
-      # We use a custom build script for pdoc itself, ideally you just run `pdoc -o docs/ ...` here.
-      - run: pdoc -o docs/ apb_spatial_computer_vision
-      #python docs/make.py
+      - name: Generate documentation
+        run: conda run -n myenv pdoc -o docs/ apb_spatial_computer_vision
 
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs/
+
+
 
   # Deploy the artifact to GitHub pages.
   # This is a separate job so that only actions/deploy-pages has the necessary permissions.
