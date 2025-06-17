@@ -26,7 +26,9 @@ jobs:
           python-version: '3.13'
 
       # ADJUST THIS: install all dependencies (including pdoc)
-      - run: pip install pdoc requirements.txt
+      - run: pip install pdoc
+      - run: pip install -r requirements.txt
+
       # ADJUST THIS: build your documentation into docs/.
       # We use a custom build script for pdoc itself, ideally you just run `pdoc -o docs/ ...` here.
       - run: pdoc -o docs/ apb_spatial_computer_vision
