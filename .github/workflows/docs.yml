@@ -37,7 +37,7 @@ jobs:
       - name: Update yaml
         run: conda run -n sam_apb_env python docs/automate_yaml.py
       - name: Push to ghpages
-        run: conda run -n sam_apb_envmkdocs gh-deploy --force
+        run: conda run -n sam_apb_env mkdocs gh-deploy --force
         
       # - name: Install pdoc
       #   run: conda run -n sam_apb_env pip install pdoc
