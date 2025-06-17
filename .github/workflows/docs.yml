@@ -1,10 +1,10 @@
-name: website
+name: documentation github pages
 
 # build the documentation whenever there are new commits on main
 on:
   push:
     branches:
-      - mkdocs
+      - main
     # Alternative: only build for tags.
     # tags:
     #   - '*'
@@ -41,16 +41,6 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site/ 
-          
-      # - name: Install pdoc
-      #   run: conda run -n sam_apb_env pip install pdoc
-
-
-      # - name: Generate documentation
-      #   run: conda run -n sam_apb_env pdoc -o docs/ apb_spatial_computer_vision
-      # - uses: actions/upload-pages-artifact@v3
-      #   with:
-      #     path: docs/ 
 
   # Deploy the artifact to GitHub pages.
   # This is a separate job so that only actions/deploy-pages has the necessary permissions.
