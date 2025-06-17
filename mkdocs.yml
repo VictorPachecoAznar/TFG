@@ -1,0 +1,36 @@
+site_name: APB SPATIAL COMPUTER VISION
+repo_url: https://github.com/VictorPachecoAznar/TFG
+theme:
+  name: material
+  repo_name: github
+  icon:
+    repo: fontawesome/brands/github
+
+  #logo: assets/logo.svg
+  features:
+    - navigation.tabs
+  palette:
+    scheme: default
+  font:
+    text: Roboto
+    code: Roboto Mono
+  favicon: images/favicon.ico
+
+nav:
+- Home: index.md
+- API:
+  - Fire run: api/fire_run.md
+  - Lang sam utilities: api/lang_sam_utilities.md
+  - Main: api/main.md
+  - Raster utilities: api/raster_utilities.md
+  - Sam utilities: api/sam_utilities.md
+  - Vector utilities: api/vector_utilities.md
+plugins:
+- search
+- mkdocstrings:
+    handlers:
+      python:
+        options:
+          docstring_style: google
+          show_source: true
+          merge_init_into_class: true
