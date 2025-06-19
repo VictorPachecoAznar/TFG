@@ -5,6 +5,7 @@ theme:
   repo_name: github
   icon:
     repo: fontawesome/brands/github
+  logo: assets/logo-white.svg
 
   #logo: assets/logo.svg
   features:
