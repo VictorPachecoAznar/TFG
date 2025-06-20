@@ -335,7 +335,7 @@ def post_processing(depths: Iterable[int],
                     pyramid_dir: str,
                     detections: duckdb.DuckDBPyRelation,
                     geometry_column='geom',
-                    segmentation_name=''
+                    segmentation_name='',
 ):
     """Function to store in arrays files the detections into several different elements in order to find out what happened inside the process.
 
@@ -352,10 +352,12 @@ def post_processing(depths: Iterable[int],
     #limit_tiles,limit_boxes=create_bboxes_sam(limit,'MOSAIC')
     return tiles, [{depths[i]:{'CONTAINED_TILES':contained_tiles[i],'CONTAINED_BOXES':contained_boxes[i]}} for i in range(len(depths))]
 
-def post_processing_geojson(depth: int,
+def post_processing_geojson(depths: Iterable[int],
                             pyramid_dir: str,
                             detections: duckdb.DuckDBPyRelation,
-                            output_dir: str):
+                            output_dir: str,
+                            geometry_column='geom',
+                            segmentation_name='',):
     
     """Function to store in GeoJSON files the detections into several different elements in order to find out what happened inside the process.
 
@@ -368,12 +370,14 @@ def post_processing_geojson(depth: int,
     Returns:
         dict: Contains the names for the tiles and the arrays for the boxes
     """
-    pass
-    contained_dir,limit_dir=create_level_dirs(output_dir,depth)
-    contained,limit=filter_level(detections,pyramid_dir,depth,'geom')
-    contained_tiles,contained_boxes=create_geojson_mass(contained,'NAME',contained_dir)
-    limit_tiles,limit_boxes=create_geojson_mass(limit,'MOSAIC',limit_dir)
-    return {depth:{'CONTAINED_TILES':contained_tiles,'CONTAINED_BOXES':contained_boxes,'LIMIT_TILES':limit_tiles,'LIMIT_BOXES':limit_boxes}}
+    tiles,contained=filter_level(detections,pyramid_dir,depths,geometry_column,segmentation_name)
+
+    for depth in depths:
+        contained_dir,limit_dir=create_level_dirs(output_dir,depth)
+        contained_depth=DUCKDB.sql(f'SELECT * from contained where depth={depth}')
+        contained_tiles,contained_boxes=create_geojson_mass(contained_depth,'NAME',contained_dir)
+        #limit_tiles,limit_boxes=create_geojson_mass(limit,'MOSAIC',limit_dir)
+    return tiles, [{depths[i]:{'CONTAINED_TILES':contained_tiles[i],'CONTAINED_BOXES':contained_boxes[i]}} for i in range(len(depths))]
 
 def predict_tile(image_path,boxes,out_name,sam):
     """Apply SAM using BBOX.
@@ -461,49 +465,7 @@ def create_sam_dirs(sam_out_dir,results,depth,contained_sam_out_images=[],limit_
     contained_sam_out_images.extend([os.path.join(sam_contained_dir,os.path.splitext(os.path.basename(i))[0]+'.tif') for i in results[depth].get('CONTAINED_TILES','NO')])
     limit_sam_out_images.extend([os.path.join(sam_limit_dir,os.path.splitext(os.path.basename(i))[0]+'.tif') for i in results[depth].get('LIMIT_TILES','NO')])
     return contained_sam_out_images,limit_sam_out_images
-
-def create_random_points(extents_list,tile_extents):
-    """Generates random points along a set of boxes and also around their tiles. 
-        Stores them in table random_points in the DUCKDB connection
-
-    Args:
-        extents_list (Iterable): DUCKDB extent list (format achieved using ST_EXTENT())
-        tile_extents (Iterable): Paths to the files where the random points are to be placed
-    """
-    DUCKDB.execute(f"CREATE TABLE random_points AS SELECT * geom FROM ST_GENERATEPOINTS({extents_list[0]}::BOX_2D,100)")
-
-    for i in range(1,len(extents_list)):
-        DUCKDB.execute(f'''INSERT INTO random_points SELECT * geom FROM ST_GENERATEPOINTS({extents_list[i]}::BOX_2D,100)''')
-    for i in range(len(tile_extents)):
-        DUCKDB.execute(f'''INSERT INTO random_points SELECT * geom FROM ST_GENERATEPOINTS({tile_extents[i]}::BOX_2D,100)''')
-    
-def pyramid_sam_apply(image_path:str,
-                      geospatial_prompt_file_path:str,
-                      lowest_pixel_size:int,
-                      geometry_column:str,
-                      min_expected_element_area:float,
-                      segmentation_name:str,
-                      sam:SamGeo_apb):
-    """Iteratively generate SAM segmentations
-
-    Args:
-        image (str): Aerial image to be segmented
-        geospatial_prompt_file_path (str): Path to any geospatial file. 
-                                        Available formats: see ST_READ drivers in DuckDB (run DUCKDB.sql('SELECT * FROM ST_Drivers();')).
-        lowest_pixel_size (int): Pixel size for all tiles, which will have different resolutions
-        geometry_column (str): Geometry column in the geospatial prompt file
-        min_expected_element_area (numeric): 
-        segmentation_name (str): The name for the segmentation object. Should be defaulted to ''
-        sam (SamGeo_apb): The SAM model
-    """
-    
-    input_image=Ortophoto(image_path)
-    detections=read_file(geospatial_prompt_file_path)
-    input_image.pyramid=folder_check(os.path.join(input_image.folder,os.path.basename(input_image.raster_path).split('.')[0])+'_pyramid')
-    pyramid=input_image.get_pyramid(lowest_pixel_size)    
-    depths=[depth for depth in range(input_image.get_pyramid_depth())]
-    
-    tiles,result=post_processing(pyramid_dir=pyramid,detections=detections,geometry_column=geometry_column,depths=depths,segmentation_name=segmentation_name)
+def create_first_iteration(result,segmentation_name,):    
     results=dict(ChainMap(*result))
     
     from itertools import chain
@@ -534,6 +496,54 @@ def pyramid_sam_apply(image_path:str,
     first_iteration_predictions_tile=DUCKDB.sql('''SELECT ST_GEOMFROMTEXT(d.wkt) as geom
                from df_first_iteration d''')
     
+    
+def create_random_points(extents_list,tile_extents):
+    """Generates random points along a set of boxes and also around their tiles. 
+        Stores them in table random_points in the DUCKDB connection
+
+    Args:
+        extents_list (Iterable): DUCKDB extent list (format achieved using ST_EXTENT())
+        tile_extents (Iterable): Paths to the files where the random points are to be placed
+    """
+    DUCKDB.execute(f"CREATE TABLE random_points AS SELECT * geom FROM ST_GENERATEPOINTS({extents_list[0]}::BOX_2D,100)")
+
+    for i in range(1,len(extents_list)):
+        DUCKDB.execute(f'''INSERT INTO random_points SELECT * geom FROM ST_GENERATEPOINTS({extents_list[i]}::BOX_2D,100)''')
+    for i in range(len(tile_extents)):
+        DUCKDB.execute(f'''INSERT INTO random_points SELECT * geom FROM ST_GENERATEPOINTS({tile_extents[i]}::BOX_2D,100)''')
+    
+
+    
+def pyramid_sam_apply(image_path:str,
+                      geospatial_prompt_file_path:str,
+                      lowest_pixel_size:int,
+                      geometry_column:str,
+                      min_expected_element_area:float,
+                      segmentation_name:str,
+                      sam:SamGeo_apb):
+    """Iteratively generate SAM segmentations
+
+    Args:
+        image (str): Aerial image to be segmented
+        geospatial_prompt_file_path (str): Path to any geospatial file. 
+                                        Available formats: see ST_READ drivers in DuckDB (run DUCKDB.sql('SELECT * FROM ST_Drivers();')).
+        lowest_pixel_size (int): Pixel size for all tiles, which will have different resolutions
+        geometry_column (str): Geometry column in the geospatial prompt file
+        min_expected_element_area (numeric): 
+        segmentation_name (str): The name for the segmentation object. Should be defaulted to ''
+        sam (SamGeo_apb): The SAM model
+    """
+    
+    input_image=Ortophoto(image_path)
+    detections=read_file(geospatial_prompt_file_path)
+    input_image.pyramid=folder_check(os.path.join(input_image.folder,os.path.basename(input_image.raster_path).split('.')[0])+'_pyramid')
+    pyramid=input_image.get_pyramid(lowest_pixel_size)    
+    depths=[depth for depth in range(input_image.get_pyramid_depth())]
+    
+    tiles,result=post_processing(pyramid_dir=pyramid,detections=detections,geometry_column=geometry_column,depths=depths,segmentation_name=segmentation_name)
+
+    first_iteration_predictions_tile,contained_sam_out_images=create_first_iteration(result,
+                                                                                     segmentation_name)
     #SEGUNDA ITERACIÓN DESACOPLADA, FALTA DESACOPLAR LA PRIMERA
     create_second_iteration(input_image=input_image,
                             low_resolution_geometries_duckdb=first_iteration_predictions_tile,
@@ -544,37 +554,54 @@ def pyramid_sam_apply(image_path:str,
                             contained_sam_out_images=contained_sam_out_images,
                             )
     
-def pyramid_sam_apply_geojson(image,prompt_file,lowest_pixel_size,geometry_column,sam):
-    
-    pass
+def pyramid_sam_apply_geojson(image_path:str,
+                            geospatial_prompt_file_path:str,
+                            lowest_pixel_size:int,
+                            geometry_column:str,
+                            min_expected_element_area:float,
+                            segmentation_name:str,
+                            sam:SamGeo_apb,
+                            results_dir:str= None,
+):
+    """Generate a pyramid with intermediate GeoJSON files. Slower performance but allows for repeatability
 
-    input_image=Ortophoto(image)
-    detections=read_file(prompt_file)
-    data_loaded_post_processing=partial(post_processing,pyramid_dir=input_image.get_pyramid(lowest_pixel_size),detections=detections,geometry_column=geometry_column)
-    
-    data_loaded_geojson_post_processing=partial(post_processing_geojson,output_dir=results_dir,pyramid_dir=input_image.get_pyramid(lowest_pixel_size),detections=detections)
-    depths=[depth for depth in range(input_image.pyramid_depth)]
+    Args:
+        image (str): Aerial image to be segmented
+        geospatial_prompt_file_path (str): Path to any geospatial file. 
+                                        Available formats: see ST_READ drivers in DuckDB (run DUCKDB.sql('SELECT * FROM ST_Drivers();')).
+        lowest_pixel_size (int): Pixel size for all tiles, which will have different resolutions
+        geometry_column (str): Geometry column in the geospatial prompt file
+        min_expected_element_area (numeric): 
+        segmentation_name (str): The name for the segmentation object. Should be defaulted to ''
+        sam (SamGeo_apb): The SAM model
+        results_dir (str, optional): Where to store the GeoJSON files. Defaults to None, thus storing in the project folder using under "GeoJSON_bboxes_{segmentation_name}"
+    """
 
-    with ProcessPoolExecutor(5) as Executor:
-        geojson_result=list(map(data_loaded_geojson_post_processing,depths))
+    input_image=Ortophoto(image_path)
+    detections=read_file(geospatial_prompt_file_path)
+    
+    
+    if results_dir is None:
+        results_dir=folder_check(os.path.join(input_image.folder,f"GeoJSON_bboxes_{segmentation_name}"))
+    
+    input_image.pyramid=folder_check(os.path.join(input_image.folder,os.path.basename(input_image.raster_path).split('.')[0])+'_pyramid')
+    depths=[depth for depth in range(input_image.get_pyramid_depth())]
+    tiles,result=post_processing_geojson(pyramid_dir=input_image.get_pyramid(lowest_pixel_size),output_dir=results_dir,detections=detections,geometry_column=geometry_column,depths=depths,segmentation_name=segmentation_name)
 
-    results=dict(ChainMap(*geojson_result))
+
+    results=dict(ChainMap(*result))
+    first_iteration_predictions_tile,contained_sam_out_images=create_first_iteration(result,
+                                                                                     segmentation_name)
+    #SEGUNDA ITERACIÓN DESACOPLADA, FALTA DESACOPLAR LA PRIMERA
+    create_second_iteration(input_image=input_image,
+                            low_resolution_geometries_duckdb=first_iteration_predictions_tile,
+                            segmentation_name=segmentation_name,
+                            sam=sam,
+                            min_expected_element_area=min_expected_element_area,
+                            lowest_pixel_size=lowest_pixel_size,
+                            contained_sam_out_images=contained_sam_out_images,
+                            )
     
-    from itertools import chain
-    
-    contained_boxes=list(chain(*[results[i].get('CONTAINED_BOXES','NO') for i in results.keys()]))
-    contained_tiles=list(chain(*[results[i].get('CONTAINED_TILES','NO') for i in results.keys()]))
-    limit_boxes=list(chain(*[results[i].get('LIMIT_BOXES','NO') for i in results.keys()]))
-    limit_tiles=list(chain(*[results[i].get('LIMIT_TILES','NO') for i in results.keys()]))
-    
-    sam_out_dir=folder_check(os.path.join(input_image.folder,'sammed_images')) 
-    contained_sam_out_images,limit_sam_out_images=[],[]
-    for depth in list(reversed(depths)):
-        contained_sam_out_images,limit_sam_out_images=create_sam_dirs(sam_out_dir,depth,contained_sam_out_images,limit_sam_out_images) 
-        
-    sam_loaded_predict_tile=partial(predict_tile,sam=sam)
-    list(map(sam_loaded_predict_tile,contained_tiles,contained_boxes,contained_sam_out_images))
-    list(map(sam_loaded_predict_tile,limit_tiles,limit_boxes,limit_sam_out_images))
 
 def point_prompt_based_sam(
     image_path:str,
@@ -807,61 +834,16 @@ if __name__=="__main__":
     #choose_model
     #model class has optimal resolution attribute
     from apb_spatial_computer_vision.sam_utilities import SamGeo_apb
-    from samgeo.text_sam import LangSAM
-    sam = LangSAM()
-    # sam = SamGeo_apb(
-    #    model_type="vit_h",
-    #    automatic=False,
-    #    sam_kwargs=None,
-    #    )
-    # sam = SamGeo_apb(
-    #    model_type="vit_h",
-    #    automatic=False,
-    #    sam_kwargs={
-    #             'points_per_side': 32,
-    #             'points_per_batch': 32,
-    #             'pred_iou_thresh': 0.88,
-    #             'stability_score_thresh': 0.95,
-    #             'stability_score_offset': 1.0,
-    #             'box_nms_thresh': 0.7,
-    #             'crop_n_layers': 0,
-    #             'crop_nms_thresh': 0.7,
-    #             'crop_overlap_ratio': 512 / 1500,
-    #             'crop_n_points_downscale_factor': 1,
-    #             'point_grids':  None,
-    #             'min_mask_region_area': 0,
-    #             'output_mode': "binary_mask",}
-    #    )
-    #forma=SamGeo_apb.raster_to_vector(r'C:\dev\TFG\data\ORTO_ZAL_BCN\sammed_images_2\subset_2\contained\tile_4096_grid_2_4.tif',
-    #                     r'C:\dev\TFG\data\ORTO_ZAL_BCN\sammed_images_2\subset_2\contained\tile_4096_grid_2_4_r.geojson')
-    #print(forma)
-    t0=time.time()
-    #gdf=gpd.read_file(os.path.join(OUT_DIR,'tanks_50c_40iou.geojson'))
-    #gdf=prediction_to_bbox(gdf,crs)
-    
-    #input_image=os.path.join(DATA_DIR,'ORTO_ZAL_BCN.tif')
-                                  #'ORTO_ZAL_BCN_pyramid','raster','subset_2','tile_4096_grid_0_2.tif'
-                                  
-    #results_dir=folder_check(os.path.join(input_image.folder,'intersection_results'))
-    #grande=Tile('D:\\VICTOR_PACHECO\\CUARTO\\PROCESADO_IMAGEN\\data\\ORTO_ME_BCN\\ORTO_ME_BCN_pyramid\\raster\\subset_2\\tile_4096_grid_4_1.tif')
-    #grande.get_children()
+    sam = SamGeo_apb(
+       model_type="vit_h",
+       automatic=False,
+       sam_kwargs=None,
+       )
     input_image=os.path.join(DATA_DIR,'ORTO_ZAL_BCN.tif')
-    
-    
-
-
-    #    FAILED ATTEMPT AT USING PREVIOUS IMAGES AS PROMPTS
-    # sam.set_image( os.path.join(DATA_DIR,"ORTO_ME_BCN","ORTO_ME_BCN_pyramid","raster","subset_2","tile_4096_grid_4_1.tif"))
-    # sam.predict(
-    #    mask_input=np.array([cv2.resize(Ortophoto(os.path.join(DATA_DIR,"ORTO_ME_BCN","sammed_images","subset_2","contained","tile_4096_grid_4_1.tif")).raster.ReadAsArray(),
-    #                          (256,256),
-    #                          interpolation=cv2.INTER_LINEAR)]),
-    #    output='prueba_image_prompt.tif',
-    #    dtype="uint8"
     # 
     detections=os.path.join(OUT_DIR,'QGIS_BUILDINGS','ORIENTED_BOXES.GEOJSON')
     #detections=os.path.join(OUT_DIR,'tanks_50c_40iou.geojson')
-    pyramid_sam_apply(input_image,detections,1024,'geom',0.5,'qgis_buildings',sam)
+    pyramid_sam_apply_geojson(input_image,detections,1024,'geom',0.5,'qgis_buildings',sam)
     
 
     pass    
