@@ -1,7 +1,41 @@
-from apb_spatial_computer_vision import *
+# from apb_spatial_computer_vision import *
 from apb_spatial_computer_vision.main import *
 from apb_spatial_computer_vision.raster_utilities import Ortophoto
     
+def create_first_iteration(result,segmentation_name,):    
+    results=dict(ChainMap(*result))
+    
+    from itertools import chain
+
+    contained_boxes=list(chain(*[results[i].get('CONTAINED_BOXES',None) for i in results.keys()]))
+    contained_tiles=list(chain(*[results[i].get('CONTAINED_TILES',None) for i in results.keys()]))
+
+    sam_out_dir=folder_check(os.path.join(input_image.folder,f'sam_results_{segmentation_name}')) 
+    contained_sam_out_images,limit_sam_out_images=[],[]
+
+    for depth in list(results.keys()):
+        contained_sam_out_images,limit_sam_out_images=create_sam_dirs(sam_out_dir,results,depth,contained_sam_out_images,limit_sam_out_images) 
+
+    sam_loaded_predict_tile=partial(predict_tile,sam=sam)
+
+    successful_contained=list(map(sam_loaded_predict_tile,contained_tiles,contained_boxes,contained_sam_out_images))
+    successful_contained=[x for x in successful_contained if x is not None]
+
+    first_iteration_sammed_mosaic=os.path.join(sam_out_dir,f'resultado_final1_{segmentation_name}.tif')
+    first_iteration_sammed_vector=os.path.join(sam_out_dir,f'first_iteration_{segmentation_name}.geojson')
+
+    Ortophoto.mosaic_rasters(successful_contained,first_iteration_sammed_mosaic,pixel_value_to_be_ignored=0)
+    wkt_first_iteration=SamGeo_apb.raster_to_vector(first_iteration_sammed_mosaic,output=first_iteration_sammed_vector,dst_crs=input_image.crs)
+    df_first_iteration=pd.DataFrame(
+        {'wkt':np.array(wkt_first_iteration)},
+        index=[1])    
+    
+    first_iteration_predictions_tile=DUCKDB.sql('''SELECT ST_GEOMFROMTEXT(d.wkt) as geom
+               from df_first_iteration d''')
+    
+    
+
+
 def create_second_iteration(
     input_image: Ortophoto,
     low_resolution_geometries_duckdb:duckdb.DuckDBPyRelation,
@@ -152,3 +186,29 @@ def create_second_iteration(
                 FROM second_iteration_predictions
                     WHERE ST_AREA(geom)>0.5) b
             on ST_INTERSECTS(a.geom,b.geom)'''),'geom').to_parquet(os.path.join(input_image.folder,'clean_second_iteration_buffer.parquet'))  
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
