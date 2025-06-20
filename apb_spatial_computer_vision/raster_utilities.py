@@ -78,10 +78,10 @@ class Ortophoto():
         Args:
             path (str, optional): The path to the image, with the GDAL-accepted formats. Defaults to None.
             folder (str, optional): The default folder for all computations to be performed. Defaults to None, and will be stored in with a name like DATA_DIR/{path}.
-            crs (int, optional): _description_. Defaults to 25831.
+            crs (int): CRS of the tile to be loaded. Defaults to 25831.
 
         Raises:
-            Exception: _description_
+            Exception: File is not valid
         """
         try:
             #os.path.exists(path):
@@ -110,9 +110,6 @@ class Ortophoto():
         self.lowest_pixel_size=1024
 
     def __repr__(self):
-        ''''
-        PRINTS LOCAL PATH
-        '''
         return self.raster_path
 
     def _get_dirname(self,folder):
@@ -145,12 +142,20 @@ class Ortophoto():
     
     @staticmethod
     def mosaic_rasters(im_input:Iterable,name:str,fetch=False, pixel_value_to_be_ignored=''):
-        '''
-        Returns the ortophoto object of the addition of the imput elements' iterable
+        """Returns the ortophoto object of the addition of the imput elements' iterable
         
-        :param im_input: a list of Ortophoto objects or paths
-        :type im_input
-        '''
+        Args:
+            im_input (Iterable): a list of Ortophoto objects or paths
+            name (str): Output name for the mosaic
+            fetch (bool, optional): Wether to return the Ortophoto object. Defaults to False.
+            pixel_value_to_be_ignored (str, optional): Pixel value that will not override other previous values in case of overlap. Defaults to ''.
+
+        Returns:
+            outname (str): Output file name.
+            out_orto (Ortophoto): Generated ortophoto object for the output file, only created if fetch equals True.
+        """
+        
+       
         valid_images=[]
 
         def check_image(valid_images,im):
@@ -221,7 +226,9 @@ class Ortophoto():
         return self.mosaic_rasters(im_input,name=f'augmented_{self.basename}')
     
     def getSRS(self):
-        """Get the OSGEO/OSR WKT CRS 
+        """
+        Get the OSGEO/OSR WKT CRS 
+        
         Returns:
             str: OSGEO/OSR Well-known Text (WKT) CRS 
         """
@@ -251,12 +258,14 @@ class Ortophoto():
 
             
     def get_pyramid(self,lowest_pixel_size):
-        """Gets the pyramid directory or creates it if not yet implemented
+        """
+        Gets the pyramid directory or creates it if not yet implemented
 
         Args:
             lowest_pixel_size (int, optional): Number of pixels for each tile in the pyramid. Defaults to 1024.
+            
         Returns:
-            str: Path to the pyramid
+            self.pyramid (str) : Path to the pyramid
         """
         if self.pyramid is None:
             self.pyramid=self.create_pyramid(lowest_pixel_size=self.lowest_pixel_size)
@@ -265,13 +274,14 @@ class Ortophoto():
             return self.pyramid
     
     def get_pyramid_depth(self,lowest_pixel_size :int=1024):
-        """Calculates the depth of the image pyramid, creates it too if it hasn't been done yet
+        """
+        Calculates the depth of the image pyramid, creates it too if it hasn't been done yet
 
         Args:
             lowest_pixel_size (int, optional): Number of pixels for each tile in the pyramid. Defaults to 1024.
 
         Returns:
-            int: Number of levels of the pyramid
+            self.pyramid_depth (int): Number of levels of the pyramid
         """
         if not hasattr(self,"pyramid_depth"):
             self.pyramid=self.get_pyramid(lowest_pixel_size)
@@ -285,10 +295,10 @@ class Ortophoto():
         """Fetches the list containing the paths for all files in the pyramid
 
         Args:
-            lowest_pixel_size (int, optional): _description_. Defaults to 1024.
+            lowest_pixel_size (int, optional): Number of pixels for each tile in the pyramid. Defaults to 1024.
 
         Returns:
-            list: Paths for the tiles in the pyramid
+            self.pyramid_tiles (list): Paths for the tiles in the pyramid
         """
         if not hasattr(self,'pyramid_tiles'):
             pyramid_tiles=[]
@@ -317,14 +327,31 @@ class Ortophoto():
 
 
     def create_tiles_duckdb_table(self,lowest_pixel_size=1024):
-        """Generates a DUCKDB table named tiles, containing the image pyramid data and its information. May trigger pyramid_depth or pyramid calculation if not abailable.
         """
+        Generates a DUCKDB table named tiles, containing the image pyramid data and its information. May trigger pyramid_depth or pyramid calculation if not abailable.
+
+        Args:
+            lowest_pixel_size (int, optional): Number of pixels for each tile in the pyramid. Defaults to 1024.
+        """
+
         command = " UNION ALL ".join(
                 [f"SELECT *, '{depth}' depth  FROM st_read('{os.path.join(self.get_pyramid(lowest_pixel_size),'vector',f"subset_{depth}.geojson")}')" for depth in range(self.get_pyramid_depth(lowest_pixel_size))])
                                 
         DUCKDB.sql('CREATE TABLE IF NOT EXISTS tiles AS '+command)
                         
     def tesselation(self,dir,step_x,step_y=None):
+        """
+        Generation of tesselation algorithms
+
+        Args:
+            dir (str): Output directory
+            step_x (int): Pixel width of the image crops.
+            step_y (int, optional): Pixel heigh to the image crops if different. Defaults to None.
+
+        Returns:
+            name_list (list): Names for the tiles' files
+            bound_list (list[tuple]):  Nested bounding box list like [(xmin,ymin,xmax,ymax),...,(...)]
+        """
         if step_y is None:
             step_y=step_x
         metric_x=step_x*self.X_pixel
@@ -351,7 +378,8 @@ class Ortophoto():
 
     
     def polygonize(self,step_x,step_y=None):
-        """Creates GDAL-based image cropping given an image size. Concurrently-sped up. 
+        """
+        Creates GDAL-based image cropping given an image size. Concurrently-sped up. 
 
         Args:
             step_x (int): The size of the resulting elements
@@ -372,15 +400,8 @@ class Ortophoto():
         # PARALELIZADO CON PROCESOS CONCURRENTES
         with ProcessPoolExecutor() as executor:
              results = list(executor.map(processing,name_list,bound_list,chunksize=2000))
-        
-        #return name_list
-    
-        #EJECUCIÓN SIN MAPREDUCE
-        #tareas=[]
-        #for name,bound in zip(name_list,bound_list):
-        #    tareas.append(processing(name=name,bounds=bounds))
 
-    
+
     @staticmethod
     def partition_image(image_array):
         channels,height,width=image_array.shape
@@ -391,6 +412,13 @@ class Ortophoto():
     
 
     def explore(self,bound_list,tile_size):
+        """
+        Generates an interactive map in HTML for the tiles
+
+        Args:
+            bound_list (Iterable [tuple [float]]): list of bounds, like from the tiles
+            tile_size (Iterable [str]): tile size with which the bounds have been developed.
+        """
         wkts=[bounds2wkt(b)for b in bound_list]
         gdf=gpd.GeoDataFrame(geometry=gpd.GeoSeries.from_wkt(wkts),crs=self.crs)
         gdf['area']=gdf['geometry'].area
@@ -398,6 +426,15 @@ class Ortophoto():
         m.save(os.path.join(STATIC_DIR,f'{tile_size}.html'))
 
     def create_resolutions(self,depth):
+        """
+        Generate images with degraded resolutions using bilineal interpolation
+
+        Args:
+            depth (int): The amount of numbers to be used in the development of the data.
+
+        Returns:
+            resolutions_dir (str): The path where the resolutions are stored (within the ortophoto /project folder) 
+        """
         resolutions_dir=folder_check(os.path.join(self.folder,os.path.basename(self.raster_path).split('.')[0])+'_resolutions')
         gen=partial(_simplify_single_raster,raster=self,bounds=self.bounds)
         args={i:{'Name':os.path.join(folder_check(os.path.join(resolutions_dir,str(int(100*self.X_pixel*2**i))+'cm')),f'{i}.tif'),'xRes':self.X_pixel*2**i,'yRes':self.Y_pixel*2**i} for i in range(depth)}
@@ -424,7 +461,8 @@ class Ortophoto():
             _native_parallelized_simplifly_single_raster(name=df['Name'][i],xRes=df['xRes'][i],yRes=df['yRes'][i],bounds=self.bounds,raster=self)
 
     def create_pyramid(self,lowest_pixel_size):
-        """Generates a log_2 based image pyramid with the most available tiles.
+        """
+        Generates a log_2 based image pyramid with the most available tiles.
 
         Args:
             lowest_pixel_size (int): Number of pixels of the size for each tile
@@ -478,37 +516,18 @@ class Ortophoto():
         name_lists_flattened=[t for tesela in teselas for t in tesela[0]]
         bounds_lists_flattened=[t for tesela in teselas for t in tesela[1]]
         
-        # async def async_pyramid(names, xRes_list, yRes_list, bounds_list):
-        #     loop = asyncio.get_running_loop()
-        #     with ProcessPoolExecutor() as executor:
-        #         tasks = [
-        #             loop.run_in_executor(executor, _async_simplify_single_raster, name, xRes, yRes, bounds, self.raster_path,self.dstSRS_wkt)
-        #             for name, xRes, yRes, bounds in zip(names, xRes_list, yRes_list, bounds_list)
-        #         ]
-        #         return await asyncio.gather(*tasks)
-
-        # async def async_pyramid(names, xRes_list,yRes_list,bounds_list):
-        #     tasks = [
-        #     asyncio.to_thread( _async_simplify_single_raster, name, xRes, yRes, bounds, self.raster_path,self.dstSRS_wkt)
-        #     for name, xRes,yRes,bounds in zip(names, xRes_list,yRes_list,bounds_list)
-        #     ]
-        #     return await asyncio.gather(*tasks)
-
-        # asyncio.run(async_pyramid(name_lists_flattened,xRes_flattened,yRes_flattened,bounds_lists_flattened))
-
-
-
         with ProcessPoolExecutor() as executor:
                 results=list(executor.map(image_loaded_generalization,name_lists_flattened,xRes_flattened,yRes_flattened,bounds_lists_flattened))
-
 
         return pyramid_dir
 
     def cloneBand(self,image,dst_filename,driver_name = None):
-        """Creates a new raster file just like the current, given a matrix 
+        
+        """
+        Creates a new raster file just like the current, given a matrix 
 
         Args:
-            image (np.array): [[row, col],[row,col],...]
+            image (np.array): [[row, col],[row,col],...] pixel-level description of the image
             dst_filename (str): Absolute path of the file to be written to
             driver_name (str, optional): GDAL-Driver to run the create command.If not specified it will guess from the dst_filename, or if it fails as GTiff. Defaults to None.
         """
@@ -527,16 +546,15 @@ class Ortophoto():
 
     
     def find_intersection_centroid(self,gdf):
-        """ Intersects an image and a gdf and returns intersection centroid
+        """ 
+        Intersects an image and a gdf and returns intersection centroid
 
         Args:
-            gdf (_type_): gpd.GeoDataFrame object, containing a 'geometry' column
+            gdf (gpd.GeoDataFrame): Geospatial table containing a 'geometry' column
 
         Returns:
-            _type_: _description_
+            coords: The XY coordinates of the centroid of the intersection
         """
-        ''' 
-        '''
         s1=gdf.geometry
         s3=gpd.GeoSeries.from_wkt([self.wkt],crs=self.crs)
         puntos_inside=s1.intersection(s3[0])
@@ -547,13 +565,15 @@ class Ortophoto():
             return coords
 
 class Tile(Ortophoto):
-    '''Class Tile(Ortophoto)
-    Child class from parent Ortophoto
+    '''
+    Class Tile (Ortophoto)
+        Child class from parent Ortophoto
     '''
     def __init__(self,path:str,crs=25831):
         '''
-        Args:   path (str): Complete path to the tile as a string
-                crs (int=25831): CRS of the tile to be loaded
+        Args: 
+            path (str): Complete path to the tile as a string
+            crs (int): CRS of the tile to be loaded. Defaults to 25831.
         '''
         super().__init__(path,
                          os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(path)))),
@@ -569,29 +589,19 @@ class Tile(Ortophoto):
 
     def __eq__(self,t2: Ortophoto):
         """
-        Args:   self(Tile)
-                t2(Ortophoto): Tile to be compared
+        Args:   
+            self(Tile)
+            t2(Ortophoto): Tile to be compared
         Returns:
-                bool, True if in the same layer of the pyramid
+            bool, True if in the same layer of the pyramid
         Exceptions:
-                Raise if not the instance of an Ortophoto class """              
+            Raise if not an instance of the Ortophoto class 
+        """              
         
         if isinstance(t2,(Ortophoto,Tile)):
             return self.pyramid_layer==t2.pyramid_layer
         else:
             raise('NOT AN INSTANCE OF THE CLASS ORTOPHOTO OR TILE')
-
-    # def __gt__(self,t2):
-    #     return self.pyramid_layer>t2.pyramid_layer
-    
-    # def __lt__(self,t2):
-    #     return self.pyramid_layer<t2.pyramid_layer
-
-    # def __le__(self,t2):
-    #     return self.pyramid_layer<=t2.pyramid_layer
-    
-    # def __ge__(self,t2):
-    #     return self.pyramid_layer>t2.pyramid_layer
 
     def get_pyramid(self,lowest_pixel_size=1024):
         return self.pyramid
@@ -603,12 +613,12 @@ class Tile(Ortophoto):
         """Get the original size, row and col of a certain tile
 
         Args:
-            raster (_type_, optional): Raster path to be added. Defaults to None.
+            raster (str, optional): Raster path to be added. Defaults to None.
 
         Returns:
-            int: original size of the parent class from where it has been resampled
-            int: row in the current pyramid layer
-            int: col in the current pyramid layer
+            original_size (int): original size of the parent class from where it has been resampled
+            row (int): row in the current pyramid layer
+            col (int): col in the current pyramid layer
         """
         raster=self.raster_path
         if path is not None:
@@ -624,8 +634,8 @@ class Tile(Ortophoto):
         """Get the number of rows and columns of a certain level in a pyramid
 
         Returns:
-            int: number of rows at the current level
-            int: number of columns at the current level
+            n_row (int): number of rows at the current level
+            n_col (int): number of columns at the current level
         """
         curdir=os.path.join(self.raster_pyramid,f'subset_{self.pyramid_layer}')
         current_siblings=os.listdir(curdir)
@@ -636,35 +646,34 @@ class Tile(Ortophoto):
         """Retrieves the tiles which have a higher resolution for the same point (lower levels of the pyramid for a given tile)
 
         Returns:
-            list: 2D-list. Each list contains a level of deepness, from closer to the current level until the lowest layer of the pyramid.
+            out_list (list): 2D-list. Each list contains a level of deepness, from closer to the current level until the lowest layer of the pyramid.
         """
 
         base=self.pyramid_layer
         out_list=[]
         n_row,n_col=self.get_n_rows_cols()
+        
         for k in range(1,self.pyramid_depth-base):
             i_min=self.row*2**k
             i_max=i_min+2**k-1
             j_min=self.col*2**k
             j_max=j_min+2**k-1
             current=[]
-            
             for l in range(j_min,j_max+1): 
                 for m in range(i_min,i_max+1):
                     current.append((str(m).zfill(self.nice_write((n_row+1)*2**k)),str(l).zfill(self.nice_write((n_col+1)*2**k))))
-            
             out_list.append([os.path.join(self.raster_pyramid,f'subset_{base+k}',f'tile_{int(self.original_size/(2**k))}_grid_{i}_{j}.tif') for i,j in current])
         self.children=out_list
         #self.smallest_children=out_list[-1]
         return out_list
         
     def get_parents(self):
-        """Retrieves the tiles which have a higher resolution for the same point (lower levels of the pyramid for a given tile)
+        """
+        Retrieves the tiles which have a higher resolution for the same point (lower levels of the pyramid for a given tile)
 
         Returns:
-            list: 2D-list. Each list contains a level of deepness, from closer to the current level until the lowest layer of the pyramid.
+            out_list (list): 2D-list. Each list contains a level of deepness, from closer to the current level until the lowest layer of the pyramid.
         """
-
         base=self.pyramid_layer
         out_list=[]
         n_row,n_col=self.get_n_rows_cols()
@@ -680,10 +689,11 @@ class Tile(Ortophoto):
         return out_list
     
     def get_siblings(self):
-        """Finds the four tiles which come from one level higher in the pyramid. It is equivalent to finding the first parent and looking at its first children 
+        """
+        Finds the four tiles which come from one level higher in the pyramid. It is equivalent to finding the first parent and looking at its first children 
 
         Returns:
-            list: A list of the four immediate siblings in the current level of the pyramid
+            self.siblings (list: A list of the four immediate siblings in the current level of the pyramid
 
         """
         base=self.pyramid_layer
