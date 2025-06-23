@@ -522,7 +522,6 @@ class Ortophoto():
         return pyramid_dir
 
     def cloneBand(self,image,dst_filename,driver_name = None):
-        
         """
         Creates a new raster file just like the current, given a matrix 
 
@@ -610,7 +609,8 @@ class Tile(Ortophoto):
         return self.pyramid_depth
         
     def get_row_col(self,path=None):
-        """Get the original size, row and col of a certain tile
+        """
+        Get the original size, row and col of a certain tile
 
         Args:
             raster (str, optional): Raster path to be added. Defaults to None.
@@ -631,7 +631,8 @@ class Tile(Ortophoto):
         return  original_size,row,col
         
     def get_n_rows_cols(self):
-        """Get the number of rows and columns of a certain level in a pyramid
+        """
+        Get the number of rows and columns of a certain level in a pyramid
 
         Returns:
             n_row (int): number of rows at the current level
@@ -643,7 +644,8 @@ class Tile(Ortophoto):
         return n_row,n_col
     
     def get_children(self):
-        """Retrieves the tiles which have a higher resolution for the same point (lower levels of the pyramid for a given tile)
+        """
+        Retrieves the tiles which have a higher resolution for the same point (lower levels of the pyramid for a given tile)
 
         Returns:
             out_list (list): 2D-list. Each list contains a level of deepness, from closer to the current level until the lowest layer of the pyramid.
@@ -693,7 +695,7 @@ class Tile(Ortophoto):
         Finds the four tiles which come from one level higher in the pyramid. It is equivalent to finding the first parent and looking at its first children 
 
         Returns:
-            self.siblings (list: A list of the four immediate siblings in the current level of the pyramid
+            self.siblings (list): A list of the four immediate siblings in the current level of the pyramid
 
         """
         base=self.pyramid_layer
