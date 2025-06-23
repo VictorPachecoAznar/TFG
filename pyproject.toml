@@ -51,4 +51,4 @@ cuda = [
 where = ["."]
 
 [tool.setuptools.package-data]
-"" = ["original_LICENSE.txt"]
+"*" = ["original_LICENSE.txt"]
