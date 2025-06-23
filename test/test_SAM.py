@@ -15,6 +15,7 @@ class TestSAM(unittest.TestCase):
         cls.test_folder =  os.getenv('DATA_DIR', os.path.join(os.path.dirname(__file__), '..', 'data'))
         cls.path_orto = os.path.join(cls.test_folder, os.getenv('NAME_ORTOFOTO', 'ORTO_ME_BCN_2023.tif'))
         cls.complete_image = Ortophoto(cls.path_orto)
+        cls.complete_image.pyramid=(os.path.join(cls.complete_image.folder,os.path.basename(cls.complete_image.raster_path).split('.')[0])+'_pyramid')
         vector_file=os.getenv('VECTOR_FILE',None)
         if vector_file is not None:
             if os.path.exists(vector_file):
@@ -34,8 +35,8 @@ class TestSAM(unittest.TestCase):
 
         self.complete_image.pyramid=os.path.join(self.complete_image.folder,os.path.splitext(self.complete_image.basename)[0]+'_pyramid')
 
-        pyramid_sam_apply(image_path=self.complete_image.raster_path,
-                          geospatial_prompt_file_path=self.vector_file,
+        pyramid_sam_apply(input_image=self.complete_image,
+                          detections=self.vector_file,
                           lowest_pixel_size=1024,
                           geometry_column='geom',
                           min_expected_element_area=1,

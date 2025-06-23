@@ -5,12 +5,14 @@ from apb_spatial_computer_vision.lang_sam_utilities import LangSAM_apb
 from apb_spatial_computer_vision.sam_utilities import SamGeo_apb
 
 def smart_partial(function,**kwargs):
-    """Partial function that keeps documentation
+    """
+    Partial function that keeps documentation
+    
     Args:
         function (function): The original function
         **kwargs: The arguments to be stored onto the funtion
     Returns:
-        function: Partialized function with all documentation
+        function (function): Partialized function with all documentation
     """
     return update_wrapper(partial(function,**kwargs),function)
 
