@@ -7,7 +7,7 @@ name = "apb_spatial_computer_vision"
 version = "0.1.0"
 description = "Python package to integrate image pyramids and raster/vector algorithms for computer vision at Port of Barcelona. Allows text, bounding box and point-based segmentation based on SAMGeo and GroundingDINO."
 readme = "README.md"
-license = { file = "LICENSE" , file="original_LICENSE.txt"}
+license = { file = "LICENSE"}
 authors = [
     { name = "Víctor Pacheco Aznar", email = "vpachecoaznar@gmail.com" }
 ]
@@ -49,3 +49,6 @@ cuda = [packages = [
 
 [tool.setuptools.packages.find]
 where = ["."]
+
+[tool.setuptools.package-data]
+"" = ["original_LICENSE.txt"]
