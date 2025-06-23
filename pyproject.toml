@@ -30,7 +30,7 @@ cpu = [
     "pyarrow==20.0.0",
     "openpyxl==3.1.5"
 ]
-cuda = [packages = [
+cuda = [
     "gdal==3.10.2",
     "geopandas==1.0.1",
     "numpy==2.2.3",
