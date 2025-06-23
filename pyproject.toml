@@ -45,7 +45,7 @@ cuda = [
     "pytorch==*=cuda*",
     "pyarrow==20.0.0",
     "openpyxl==3.1.5"
-]]
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
