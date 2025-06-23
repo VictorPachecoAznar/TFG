@@ -345,7 +345,7 @@ def post_processing(depths: Iterable[int],
         detections (duckdb.DuckDBPyRelation): Table with the polygon geometries to be used as box prompts
         
     Returns:
-        dict: Contains the names for the tiles and the arrays (minx,miny,maxx,maxy) for the boxes grouped by name of tile 
+        list[dict]: Contains the names for the tiles and the arrays (minx,miny,maxx,maxy) for the boxes grouped by name of tile 
     """
     tiles,contained=filter_level(detections,pyramid_dir,depths,geometry_column,segmentation_name)
     contained_tiles,contained_boxes,depths=create_bboxes_sam(contained,'NAME')
@@ -466,7 +466,19 @@ def create_sam_dirs(sam_out_dir,results,depth,contained_sam_out_images=[],limit_
     limit_sam_out_images.extend([os.path.join(sam_limit_dir,os.path.splitext(os.path.basename(i))[0]+'.tif') for i in results[depth].get('LIMIT_TILES','NO')])
     return contained_sam_out_images,limit_sam_out_images
 
-def create_first_iteration(result,segmentation_name,):    
+def create_first_iteration(result,segmentation_name,input_image,sam):    
+    """Create a first segmentation with the best available contained bounding boxes in the tiles
+
+    Args:
+        result (list[dict]): Contains the names for the tiles and the arrays (minx,miny,maxx,maxy) for the boxes grouped by name of tile 
+
+        segmentation_name (str): The name for the segmentation object. Should be defaulted to ''
+        input_image (_type_): _description_
+        sam (SamGeo_apb): The SAM model    
+
+    Returns:
+        _type_: _description_
+    """
     results=dict(ChainMap(*result))
     
     from itertools import chain
@@ -496,6 +508,7 @@ def create_first_iteration(result,segmentation_name,):
     
     first_iteration_predictions_tile=DUCKDB.sql('''SELECT ST_GEOMFROMTEXT(d.wkt) as geom
                from df_first_iteration d''')
+    return first_iteration_predictions_tile,contained_sam_out_images
     
     
 def create_random_points(extents_list,tile_extents):
@@ -515,22 +528,23 @@ def create_random_points(extents_list,tile_extents):
 
 def file_pyramid_sam_apply(image_path:str,
                       geospatial_prompt_file_path:str,
-                      lowest_pixel_size:int,
                       geometry_column:str,
-                      min_expected_element_area:float,
                       segmentation_name:str,
-                      sam:SamGeo_apb):
+                      sam:SamGeo_apb,
+                      min_expected_element_area:float=0.5,
+                      lowest_pixel_size:int=1024,):
     """Iteratively generate SAM segmentations
 
     Args:
-        image (str): Aerial image to be segmented
+        image_path (str): Aerial image to be segmented
         geospatial_prompt_file_path (str): Path to any geospatial file. 
                                         Available formats: see ST_READ drivers in DuckDB (run DUCKDB.sql('SELECT * FROM ST_Drivers();')).
-        lowest_pixel_size (int): Pixel size for all tiles, which will have different resolutions
         geometry_column (str): Geometry column in the geospatial prompt file
-        min_expected_element_area (numeric):  
         segmentation_name (str): The name for the segmentation object. Should be defaulted to ''
         sam (SamGeo_apb): The SAM model
+        min_expected_element_area (float, optional): Area of the smallest element to be expected. Defaults to 0.5.
+        lowest_pixel_size (int, optional): Pixel size for all tiles, which will have different resolutions. Defaults to 1024.
+
     """
        
     input_image=Ortophoto(image_path)
@@ -548,11 +562,12 @@ def file_pyramid_sam_apply(image_path:str,
     
 def pyramid_sam_apply(input_image:Ortophoto,
                       detections:duckdb.DuckDBPyRelation,
-                      lowest_pixel_size:int,
                       geometry_column:str,
-                      min_expected_element_area:float,
                       segmentation_name:str,
-                      sam:SamGeo_apb):
+                      sam:SamGeo_apb,
+                      min_expected_element_area:float=0.5,
+                      lowest_pixel_size:int=1024,
+                    ):
     
     """Iteratively generate SAM segmentations using image pyramid algorithms. First through bounding box and then refined using point prompts
 
@@ -560,12 +575,12 @@ def pyramid_sam_apply(input_image:Ortophoto,
         input_image (Ortophoto): The complete image, whose pyramid will be dynamically created if not already loaded into the object
         detections (duckdb.DuckDBPyRelation | str | Iterable): Polygon geometry with a detection to be better segmented
                                                                Available formats: see ST_READ drivers in DuckDB (run DUCKDB.sql('SELECT * FROM ST_Drivers();')).
-
-        lowest_pixel_size (int): Pixel size for all tiles, which will have different resolutions
         geometry_column (str): Geometry column in the geospatial prompt file
-        min_expected_element_area (float, optional): Area of the smallest element to be expected.
         segmentation_name (str): The name for the segmentation object. Should be defaulted to ''
         sam (SamGeo_apb): The SAM model
+        lowest_pixel_size (int): Pixel size for all tiles, which will have different resolutions. Defaults to 1024.
+        min_expected_element_area (float, optional): Area of the smallest element to be expected. Defaults to 0.5.
+
     """
 
     if not isinstance(detections,duckdb.DuckDBPyRelation):
@@ -580,8 +595,9 @@ def pyramid_sam_apply(input_image:Ortophoto,
     tiles,result=post_processing(pyramid_dir=pyramid,detections=detections,geometry_column=geometry_column,depths=depths,segmentation_name=segmentation_name)
 
     first_iteration_predictions_tile,contained_sam_out_images=create_first_iteration(result,
-                                                                                     segmentation_name)
-    #SEGUNDA ITERACIÓN DESACOPLADA, FALTA DESACOPLAR LA PRIMERA
+                                                                                     segmentation_name,
+                                                                                     input_image,
+                                                                                     sam)
     create_second_iteration(input_image=input_image,
                             low_resolution_geometries_duckdb=first_iteration_predictions_tile,
                             segmentation_name=segmentation_name,
@@ -593,11 +609,11 @@ def pyramid_sam_apply(input_image:Ortophoto,
     
 def pyramid_sam_apply_geojson(image_path:str,
                             geospatial_prompt_file_path:str,
-                            lowest_pixel_size:int,
                             geometry_column:str,
-                            min_expected_element_area:float,
                             segmentation_name:str,
-                            sam:SamGeo_apb,
+                            sam:SamGeo_apb,                            
+                            lowest_pixel_size:int=1024,
+                            min_expected_element_area:float=0.5,
                             results_dir:str= None,
 ):
     """
@@ -607,11 +623,11 @@ def pyramid_sam_apply_geojson(image_path:str,
         image (str): Aerial image to be segmented
         geospatial_prompt_file_path (str): Path to any geospatial file. 
                                         Available formats: see ST_READ drivers in DuckDB (run DUCKDB.sql('SELECT * FROM ST_Drivers();')).
-        lowest_pixel_size (int): Pixel size for all tiles, which will have different resolutions
         geometry_column (str): Geometry column in the geospatial prompt file
-        min_expected_element_area (float, optional): Area of the smallest element to be expected.
         segmentation_name (str): The name for the segmentation object. Should be defaulted to ''
         sam (SamGeo_apb): The SAM model
+        lowest_pixel_size (int, optional): Pixel size for all tiles, which will have different resolutions. Defaults to 1024.
+        min_expected_element_area (float, optional): Area of the smallest element to be expected. Defaults to 0.5.
         results_dir (str, optional): Where to store the GeoJSON files. Defaults to None, thus storing in the project folder using under "GeoJSON_bboxes_{segmentation_name}"
     """
 
@@ -629,8 +645,9 @@ def pyramid_sam_apply_geojson(image_path:str,
 
     results=dict(ChainMap(*result))
     first_iteration_predictions_tile,contained_sam_out_images=create_first_iteration(result,
-                                                                                     segmentation_name)
-    #SEGUNDA ITERACIÓN DESACOPLADA, FALTA DESACOPLAR LA PRIMERA
+                                                                                     segmentation_name,
+                                                                                     input_image,
+                                                                                     sam)
     create_second_iteration(input_image=input_image,
                             low_resolution_geometries_duckdb=first_iteration_predictions_tile,
                             segmentation_name=segmentation_name,
@@ -834,10 +851,10 @@ def text_to_bbox_lowres_complete(
         input_image (Ortophoto): Aerial image where the element should be identified
         text_prompt (str): Prompt for Grounding DINO.
         output (str, optional): Path of where to store the bounding box geometries. Defaults to None
-        sam (LangSAM_apb,optional). Modified SAMGeo to allow for selfstanding DINO. Defaults to none
+        sam (LangSAM_apb,optional). Modified SAMGeo object to allow for selfstanding DINO. If not provided, creates a LangSAM_apb object with default parameters. Defaults to None
 
     Returns:
-        _type_: _description_
+        bboxes_duckdb (duckdb.DuckdbPyRelation): Spatial database table with the bounding boxes found by Grounding DINO.
     """
     largest_tile=input_image.get_resolution_tiles()[-1]
     if sam is None:
