@@ -3,7 +3,8 @@ This repository hosts the code for my Bachelors' thesis in Geoinfomation and Geo
 The project has been tutored by Port de Barcelona and Universitat Politècnica de Catalunya.
 
 Please refer to the homepage of the project:
-🏡 [Access homepage][https://victorpachecoaznar.github.io/TFG/]
+
+🏡 https://victorpachecoaznar.github.io/TFG/
 
 # About this package
 The goal of APB_spatial_computer_vision is to provide a framework to perform computer vision tasks on geospatial imagery.
