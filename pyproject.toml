@@ -40,7 +40,7 @@ cuda = [
     "matplotlib==3.10.0",
     "pyproj==3.7.1",
     "scipy==1.15.2",
-    "torch==2.5.1+cu118 @ https://download.pytorch.org/whl/cu118,
+    "torch==2.5.1+cu118 @ https://download.pytorch.org/whl/cu118",
     "pyarrow==20.0.0",
     "openpyxl==3.1.5"
 ]
