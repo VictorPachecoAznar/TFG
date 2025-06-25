@@ -335,7 +335,7 @@ class Ortophoto():
         """
 
         command = " UNION ALL ".join(
-                [f"SELECT *, '{depth}' depth  FROM st_read('{os.path.join(self.get_pyramid(lowest_pixel_size),'vector',f"subset_{depth}.geojson")}')" for depth in range(self.get_pyramid_depth(lowest_pixel_size))])
+                [f"SELECT *, '{depth}' depth  FROM st_read('{os.path.join(self.get_pyramid(lowest_pixel_size),'vector',f'subset_{depth}.geojson')}')" for depth in range(self.get_pyramid_depth(lowest_pixel_size))])
                                 
         DUCKDB.sql('CREATE TABLE IF NOT EXISTS tiles AS '+command)
                         
