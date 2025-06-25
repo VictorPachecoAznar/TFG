@@ -106,7 +106,7 @@ def filter_level(detections,pyramid_dir,depths,geometry_column, segmentation_nam
         duckdb.DuckDBPyRelation: Limit geometries and their respective virtual raster layer (GDAL VRT) tile names
     """
     command = " UNION ALL ".join(
-            [f"SELECT *, '{depth}' depth  FROM st_read('{os.path.join(pyramid_dir,'vector',f"subset_{depth}.geojson")}')" for depth in depths])
+            [f"SELECT *, '{depth}' depth  FROM st_read('{os.path.join(pyramid_dir,'vector',f'subset_{depth}.geojson')}')" for depth in depths])
                             
     tiles=DUCKDB.sql('CREATE TABLE IF NOT EXISTS tiles AS '+command)
 
