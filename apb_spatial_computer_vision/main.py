@@ -402,7 +402,6 @@ def predict_tile(image_path,boxes,out_name,sam):
         sam.set_image(image_path)
         try:
                 sam.predict(boxes=boxes,point_crs='EPSG:4326', output=out_name, dtype="uint8")
-                print('out')
                 return out_name
         except:
                 print(f'{out_name} could not be loaded')  
@@ -437,7 +436,6 @@ def predict_tile_points(image_path,boxes,out_name,point_coords,point_labels,sam)
         sam.set_image(image_path)
         try:
             sam.predict(point_coords=point_coords,point_labels=point_labels,point_crs='EPSG:4326', output=out_name, dtype="uint8")
-            print('out')
             return out_name
         except:
             print(f'{out_name} could not be loaded')
