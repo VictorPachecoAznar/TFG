@@ -187,8 +187,6 @@ class SamGeo_apb(SamGeo):
             return_results (bool, optional): Whether to return the predicted masks, scores, and logits. Defaults to False.
 
         """
-        if os.path.splitext(self.source)[1]=='.vrt':
-            print('manual')
         out_of_bounds = []
 
         if isinstance(boxes, str):

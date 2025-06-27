@@ -20,7 +20,6 @@ cpu = [
     "geopandas==1.0.1",
     "numpy==2.2.3",
     "pandas==2.2.3",
-    "python==3.12.9",
     "shapely==2.0.7",
     "segment-geospatial==0.12.4",
     "duckdb==1.2.0",
@@ -35,14 +34,13 @@ cuda = [
     "geopandas==1.0.1",
     "numpy==2.2.3",
     "pandas==2.2.3",
-    "python==3.12.9",
     "shapely==2.0.7",
     "segment-geospatial==0.12.4",
     "duckdb==1.2.0",
     "matplotlib==3.10.0",
     "pyproj==3.7.1",
     "scipy==1.15.2",
-    "torch @ https://download.pytorch.org/whl/cu118/torch-2.2.0%2Bcu118-cp311-cp311-linux_x86_64.whl",
+    "torch==2.5.1+cu118",
     "pyarrow==20.0.0",
     "openpyxl==3.1.5"
 ]

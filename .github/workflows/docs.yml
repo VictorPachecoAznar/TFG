@@ -31,7 +31,7 @@ jobs:
           auto-update-conda: true
 
       - name: Install mkdocs
-        run: conda run -n sam_apb_env pip install mkdocs mkdocstrings[python] mkdocs-material
+        run: conda run -n sam_apb_env pip install mkdocs mkdocstrings[python] mkdocs-material mkdocs-jupyter
       - name: Update markdown
         run: conda run -n sam_apb_env python docs/automate_index_md.py
       - name: Update yaml

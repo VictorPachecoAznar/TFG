@@ -14,6 +14,12 @@ Its focus is semantic segmentation, mainly though SAM. The logic can be accessed
 - Through bounding box, to perform SAM and achieve segmentation.
 - Throgh a lower resolution vector dataset coming from another model, in an attempt to improve segmentation.
 
+# Tools
+- 🦆 The program leverages Spatial-SQL **DuckDB** queries for precise vector operations
+- ⚡ Image pyramids have been optimized via concurrency to GDAL-warping
+- 📷 Integration of virtual layers through GDAL to SAMGeo
+- 📄 MKDocs for automated docs+ jupyter visualization
+
 # Instructions
 The entry points of the system are the following environment variables:
 - TEXT_PROMPT: a string with the prompt to look for via Grounding DINO

@@ -106,7 +106,7 @@ def filter_level(detections,pyramid_dir,depths,geometry_column, segmentation_nam
         duckdb.DuckDBPyRelation: Limit geometries and their respective virtual raster layer (GDAL VRT) tile names
     """
     command = " UNION ALL ".join(
-            [f"SELECT *, '{depth}' depth  FROM st_read('{os.path.join(pyramid_dir,'vector',f"subset_{depth}.geojson")}')" for depth in depths])
+            [f"SELECT *, '{depth}' depth  FROM st_read('{os.path.join(pyramid_dir,'vector',f'subset_{depth}.geojson')}')" for depth in depths])
                             
     tiles=DUCKDB.sql('CREATE TABLE IF NOT EXISTS tiles AS '+command)
 
@@ -402,7 +402,6 @@ def predict_tile(image_path,boxes,out_name,sam):
         sam.set_image(image_path)
         try:
                 sam.predict(boxes=boxes,point_crs='EPSG:4326', output=out_name, dtype="uint8")
-                print('out')
                 return out_name
         except:
                 print(f'{out_name} could not be loaded')  
@@ -437,7 +436,6 @@ def predict_tile_points(image_path,boxes,out_name,point_coords,point_labels,sam)
         sam.set_image(image_path)
         try:
             sam.predict(point_coords=point_coords,point_labels=point_labels,point_crs='EPSG:4326', output=out_name, dtype="uint8")
-            print('out')
             return out_name
         except:
             print(f'{out_name} could not be loaded')
