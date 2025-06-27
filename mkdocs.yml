@@ -26,8 +26,12 @@ nav:
   - Raster utilities: api/raster_utilities.md
   - Sam utilities: api/sam_utilities.md
   - Vector utilities: api/vector_utilities.md
+- Examples:
+  - Building segmentation with DINO + SAM: building.ipynb
+
 plugins:
 - search
+- mkdocs-jupyter
 - mkdocstrings:
     handlers:
       python:

@@ -508,3 +508,8 @@ static/
 shell/UTMOHehx.exe
 jupyter/
 models/
+
+!docs/*.html
+!docs/**/*.html
+!docs/*.ipynb
+!docs/**/*.ipynb
