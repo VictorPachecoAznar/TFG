@@ -28,3 +28,21 @@ The entry points of the system are the following environment variables:
 - BASE_DIR: where this package is located, acessible for deployments
 - NAME_ORTOFOTO: basename for the image to be processed
 
+# Installation
+In order to install this package, please download the yaml file in order to create the environment:
+- ✅ If CUDA is available:
+
+  ```
+  conda env create -f environment_cuda.yaml
+  conda activate sam_apb_env
+  pip install apb_spatial_computer_vision
+  ```
+  
+- ❌ If CUDA is not available:
+  ```
+  conda env create -f environment_cpu.yaml
+  conda activate sam_apb_env
+  pip install apb_spatial_computer_vision
+  ```
+
+
