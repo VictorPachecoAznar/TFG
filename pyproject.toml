@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "apb_spatial_computer_vision"
-version = "0.1.0"
-description = "Python package to integrate image pyramids and raster/vector algorithms for computer vision at Port of Barcelona. Allows text, bounding box and point-based segmentation based on SAMGeo and GroundingDINO."
+version = "1.1.0"
+description = "Python package to integrate image pyramids and raster/vector algorithms for computer vision at Port of Barcelona. Allows text, bounding box and point-based segmentation based on SAMGeo and GroundingDINO. Please refer to the homepage https://victorpachecoaznar.github.io/TFG/"
 readme = "README.md"
 license = { file = "LICENSE"}
 authors = [
